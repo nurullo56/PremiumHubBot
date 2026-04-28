@@ -1,0 +1,32 @@
+# ===================== TELEGRAM BOT =====================
+aiogram>=3.17.0
+
+# ===================== DATABASE =====================
+aiosqlite>=0.20.0
+alembic>=1.13.0
+
+# ===================== CONFIGURATION =====================
+python-dotenv>=1.0.1
+pydantic>=2.10.0
+pydantic-settings>=2.4.0
+
+
+# ===================== UTILITIES =====================
+pytz>=2024.1
+
+# ===================== MONITORING =====================
+sentry-sdk>=1.40.0
+
+# ===================== CACHE (Future Redis) =====================
+# redis>=5.0.0
+# fakeredis>=2.20.0
+
+# ===================== TESTING =====================
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# ===================== LOGGING =====================
+# No additional libs - using standard logging
+
+# ===================== BACKGROUND TASKS =====================
+# Using asyncio - no external scheduler needed yet
