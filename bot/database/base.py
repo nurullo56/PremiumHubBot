@@ -22,49 +22,47 @@ class DatabaseConnectionError(Exception):
 async def get_db() -> AsyncGenerator[aiosqlite.Connection, None]:
     """
     Get database connection with retry logic.
-    
+
+    Uses manual connection lifecycle (not `async with aiosqlite.connect()`) so that
+    the generator is guaranteed to stop cleanly after athrow() — avoiding the
+    "generator didn't stop after athrow()" RuntimeError that occurs when the
+    aiosqlite context manager's own cleanup raises during exception propagation.
+
     Yields:
         aiosqlite.Connection: Active database connection
-        
+
     Raises:
         DatabaseConnectionError: If connection fails after max retries
     """
+    db_path = Path(settings.db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
     retries = 0
     last_error = None
-    
+    conn = None
+
     while retries < DB_MAX_RETRIES:
         try:
-            # Ensure database directory exists
-            db_path = Path(settings.db_path)
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Connect with timeout
-            async with aiosqlite.connect(
-                database=str(db_path),
-                timeout=DB_TIMEOUT
-            ) as db:
-                # Enable Row factory
-                db.row_factory = aiosqlite.Row
-                
-                # SQLite performance optimizations
-                await db.execute("PRAGMA journal_mode=WAL")
-                await db.execute("PRAGMA synchronous=NORMAL")
-                await db.execute("PRAGMA cache_size=10000")
-                await db.execute("PRAGMA temp_store=MEMORY")
-                await db.execute("PRAGMA busy_timeout=30000")  # 30 seconds
-                
-                # Foreign keys enforcement
-                await db.execute("PRAGMA foreign_keys=ON")
-                
-                yield db
-                return  # Success - exit retry loop
-                
+            conn = await aiosqlite.connect(database=str(db_path), timeout=DB_TIMEOUT)
+            conn.row_factory = aiosqlite.Row
+            await conn.execute("PRAGMA journal_mode=WAL")
+            await conn.execute("PRAGMA synchronous=NORMAL")
+            await conn.execute("PRAGMA cache_size=10000")
+            await conn.execute("PRAGMA temp_store=MEMORY")
+            await conn.execute("PRAGMA busy_timeout=30000")
+            await conn.execute("PRAGMA foreign_keys=ON")
+            break  # connection ready — exit retry loop
         except aiosqlite.Error as e:
             last_error = e
+            if conn is not None:
+                try:
+                    await conn.close()
+                except Exception:
+                    pass
+                conn = None
             retries += 1
-            
             if retries < DB_MAX_RETRIES:
-                wait_time = DB_RETRY_DELAY * (2 ** (retries - 1))  # Exponential backoff
+                wait_time = DB_RETRY_DELAY * (2 ** (retries - 1))
                 logger.warning(
                     f"⚠️ Database connection failed (attempt {retries}/{DB_MAX_RETRIES}). "
                     f"Retrying in {wait_time:.1f}s... Error: {e}"
@@ -78,6 +76,16 @@ async def get_db() -> AsyncGenerator[aiosqlite.Connection, None]:
                 raise DatabaseConnectionError(
                     f"Failed to connect to database after {DB_MAX_RETRIES} attempts"
                 ) from last_error
+
+    try:
+        yield conn
+    finally:
+        # Always close — even if an exception was thrown into the generator.
+        # This guarantees the generator terminates cleanly after athrow().
+        try:
+            await conn.close()
+        except Exception:
+            pass
 
 
 async def init_database() -> None:

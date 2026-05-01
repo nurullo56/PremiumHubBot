@@ -4,11 +4,11 @@ Optimized for production with transaction safety and type safety.
 """
 
 import logging
-from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime
 from enum import IntEnum
-from typing import Protocol, Callable, Awaitable
+from typing import Protocol
+
+import aiosqlite
 
 from bot.database.base import get_db
 
@@ -65,63 +65,62 @@ class Migration:
 # ===================== SCHEMA HELPERS =====================
 
 class SchemaValidator:
-    """Safe schema validation and modification."""
-    
+    """
+    Safe schema validation and modification.
+
+    All methods accept an open `db` connection so that callers can share a
+    single connection/transaction — avoiding nested get_db() calls that cause
+    "database is locked" when multiple connections compete for a write lock.
+    """
+
     @staticmethod
-    async def column_exists(table: str, column: str) -> bool:
-        """Check if column exists in table."""
-        # SQLite PRAGMA safe dan injection - parametrlashtirilmaydi
-        # Lekin biz table nomini qattiq kontrolda tutamiz
-        if not table.isidentifier() or not column.isidentifier():
-            raise ValueError(f"Invalid table or column name: {table}.{column}")
-        
-        async with get_db() as db:
-            cursor = await db.execute(f"PRAGMA table_info({table})")
-            columns = {row['name'] for row in await cursor.fetchall()}
-            return column in columns
-    
-    @staticmethod
-    async def table_exists(table: str) -> bool:
-        """Check if table exists."""
+    def _validate_identifier(table: str, column: str | None = None) -> None:
         if not table.isidentifier():
             raise ValueError(f"Invalid table name: {table}")
-        
-        async with get_db() as db:
-            cursor = await db.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
-                (table,)
-            )
-            return await cursor.fetchone() is not None
-    
+        if column is not None and not column.isidentifier():
+            raise ValueError(f"Invalid column name: {column}")
+
+    @staticmethod
+    async def column_exists(db: aiosqlite.Connection, table: str, column: str) -> bool:
+        SchemaValidator._validate_identifier(table, column)
+        cursor = await db.execute(f"PRAGMA table_info({table})")
+        columns = {row['name'] for row in await cursor.fetchall()}
+        return column in columns
+
+    @staticmethod
+    async def table_exists(db: aiosqlite.Connection, table: str) -> bool:
+        SchemaValidator._validate_identifier(table)
+        cursor = await db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        )
+        return await cursor.fetchone() is not None
+
     @staticmethod
     async def add_column(
+        db: aiosqlite.Connection,
         table: str,
         column: str,
         column_type: str,
-        default: str | int | None = None
+        default: str | int | None = None,
     ) -> None:
-        """Add column if not exists."""
-        if await SchemaValidator.column_exists(table, column):
-            logger.debug(f"Column {table}.{column} already exists")
+        """Add column if it does not already exist (no implicit commit)."""
+        if await SchemaValidator.column_exists(db, table, column):
+            logger.debug(f"Column {table}.{column} already exists — skipping")
             return
-        
         default_clause = f" DEFAULT {default}" if default is not None else ""
-        query = f"ALTER TABLE {table} ADD COLUMN {column} {column_type}{default_clause}"
-        
-        async with get_db() as db:
-            await db.execute(query)
-            await db.commit()
-        
+        await db.execute(
+            f"ALTER TABLE {table} ADD COLUMN {column} {column_type}{default_clause}"
+        )
         logger.info(f"Added column {table}.{column}")
-    
+
     @staticmethod
-    async def create_index(name: str, table: str, columns: str) -> None:
-        """Create index if not exists."""
-        async with get_db() as db:
-            await db.execute(
-                f"CREATE INDEX IF NOT EXISTS {name} ON {table}({columns})"
-            )
-            await db.commit()
+    async def create_index(
+        db: aiosqlite.Connection, name: str, table: str, columns: str
+    ) -> None:
+        """Create index if not exists (no implicit commit)."""
+        await db.execute(
+            f"CREATE INDEX IF NOT EXISTS {name} ON {table}({columns})"
+        )
 
 
 # ===================== MIGRATION REGISTRY =====================
@@ -168,74 +167,77 @@ async def mark_applied(version: int, description: str) -> None:
 # ===================== MIGRATIONS =====================
 
 async def migration_v1() -> bool:
-    """Add vip_status column."""
-    await SchemaValidator.add_column("users", "vip_status", "INTEGER", 0)
+    async with get_db() as db:
+        await SchemaValidator.add_column(db, "users", "vip_status", "INTEGER", 0)
+        await db.commit()
     return True
 
 
 async def migration_v2() -> bool:
-    """Add channel description."""
-    await SchemaValidator.add_column("channels", "description", "TEXT")
+    async with get_db() as db:
+        await SchemaValidator.add_column(db, "channels", "description", "TEXT")
+        await db.commit()
     return True
 
 
 async def migration_v3() -> bool:
-    """Add premium expiry."""
-    await SchemaValidator.add_column("users", "premium_expiry", "TEXT")
+    async with get_db() as db:
+        await SchemaValidator.add_column(db, "users", "premium_expiry", "TEXT")
+        await db.commit()
     return True
 
 
 async def migration_v4() -> bool:
-    """Add last phone update tracking."""
-    await SchemaValidator.add_column("users", "last_phone_update", "TEXT")
+    async with get_db() as db:
+        await SchemaValidator.add_column(db, "users", "last_phone_update", "TEXT")
+        await db.commit()
     return True
 
 
 async def migration_v5() -> bool:
-    """Add milestone notification tracking."""
-    await SchemaValidator.add_column("users", "milestone_notified", "TEXT")
+    async with get_db() as db:
+        await SchemaValidator.add_column(db, "users", "milestone_notified", "TEXT")
+        await db.commit()
     return True
 
 
 async def migration_v6() -> bool:
-    """Add first purchase bonus tracking."""
-    await SchemaValidator.add_column("users", "first_purchase_bonus_given", "INTEGER", 0)
+    async with get_db() as db:
+        await SchemaValidator.add_column(db, "users", "first_purchase_bonus_given", "INTEGER", 0)
+        await db.commit()
     return True
 
 
 async def migration_v7() -> bool:
-    """Balance scaling system with outbox pattern."""
+    """Balance scaling system + outbox pattern. One connection, one transaction."""
     async with get_db() as db:
-        # Users table
-        await SchemaValidator.add_column("users", "balance_scaled", "INTEGER", 0)
-        await SchemaValidator.add_column("users", "referral_bonus_given", "INTEGER", 0)
-        
-        # Migrate existing balances
+        # --- users ---
+        await SchemaValidator.add_column(db, "users", "balance_scaled", "INTEGER", 0)
+        await SchemaValidator.add_column(db, "users", "referral_bonus_given", "INTEGER", 0)
+
         await db.execute("""
-            UPDATE users 
+            UPDATE users
             SET balance_scaled = CAST(COALESCE(balance, 0) * 100 AS INTEGER)
             WHERE balance_scaled = 0
         """)
-        
-        # Balance history table
-        await SchemaValidator.add_column("balance_history", "amount_scaled", "INTEGER")
-        await SchemaValidator.add_column("balance_history", "new_balance_scaled", "INTEGER")
-        
-        # Migrate balance history
+
+        # --- balance_history ---
+        await SchemaValidator.add_column(db, "balance_history", "amount_scaled", "INTEGER")
+        await SchemaValidator.add_column(db, "balance_history", "new_balance_scaled", "INTEGER")
+
         await db.execute("""
-            UPDATE balance_history 
+            UPDATE balance_history
             SET amount_scaled = CAST(COALESCE(amount, 0) * 100 AS INTEGER)
             WHERE amount_scaled IS NULL
         """)
-        
         await db.execute("""
-            UPDATE balance_history 
+            UPDATE balance_history
             SET new_balance_scaled = CAST(COALESCE(new_balance, 0) * 100 AS INTEGER)
             WHERE new_balance_scaled IS NULL
         """)
-        
-        # Create outbox table
-        if not await SchemaValidator.table_exists("outbox"):
+
+        # --- outbox ---
+        if not await SchemaValidator.table_exists(db, "outbox"):
             await db.execute("""
                 CREATE TABLE outbox (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -247,15 +249,14 @@ async def migration_v7() -> bool:
                     retry_count INTEGER DEFAULT 0
                 )
             """)
-        
-        # Indexes
-        await SchemaValidator.create_index("idx_users_balance_scaled", "users", "balance_scaled")
-        await SchemaValidator.create_index("idx_users_referral_bonus", "users", "referral_bonus_given")
-        await SchemaValidator.create_index("idx_outbox_processed", "outbox", "processed, created_at")
-        await SchemaValidator.create_index("idx_outbox_event_type", "outbox", "event_type")
-        
+
+        # --- indexes ---
+        await SchemaValidator.create_index(db, "idx_users_balance_scaled", "users", "balance_scaled")
+        await SchemaValidator.create_index(db, "idx_users_referral_bonus", "users", "referral_bonus_given")
+        await SchemaValidator.create_index(db, "idx_outbox_processed", "outbox", "processed, created_at")
+        await SchemaValidator.create_index(db, "idx_outbox_event_type", "outbox", "event_type")
+
         await db.commit()
-    
     return True
 
 

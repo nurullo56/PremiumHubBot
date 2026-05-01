@@ -105,7 +105,10 @@ async def main():
         init_sentry(settings.sentry_dsn, settings.environment)
         
         await init_database()
-        
+
+        from bot.database.migrations import run_migrations
+        await run_migrations()
+
         bot_instance = Bot(
             token=settings.bot_token,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML)
