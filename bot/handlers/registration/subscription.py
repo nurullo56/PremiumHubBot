@@ -43,19 +43,22 @@ async def check_subscription(user_id: int, message: Message, bot: Bot) -> bool:
 
 
 async def ask_subscription(message: Message, state: FSMContext):
-    """Ask for subscription."""
-    channels = await channel_service.get_active_channels()
-    
-    if not channels:
-        from bot.handlers.registration.phone import check_phone
-        await check_phone(message.from_user.id, message)
+    """Show mandatory channel subscription prompt to the user."""
+    user_id = message.from_user.id
+    bot = message.bot
+
+    keyboard = await subscription_checker.get_subscription_keyboard(bot, user_id)
+
+    if not keyboard:
+        # No mandatory channels or already subscribed — mark and skip this step
+        await user_repo.update_subscription(user_id, True)
         return
-    
+
     await message.answer(
         "⚠️ <b>Obuna bo'lish talab qilinadi</b>\n\n"
         "Botdan to'liq foydalanish uchun quyidagi kanal va guruhlarga obuna bo'ling:\n\n"
         "✅ Obuna bo'lganingizdan so'ng \"Tekshirish\" tugmasini bosing.",
-        reply_markup=get_subscription_keyboard(channels),
+        reply_markup=keyboard,
         parse_mode="HTML"
     )
     await state.set_state(RegistrationStates.waiting_for_subscription)
