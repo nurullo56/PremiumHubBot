@@ -9,14 +9,15 @@ from typing import Tuple, Optional, Dict, Any, List
 
 from bot.database.base import get_db
 from bot.database.repositories.balance_repo import balance_repo
+from bot.config.constants import BONUS_AMOUNT
 
 logger = logging.getLogger(__name__)
 
 
 # ===================== KONSTANTALAR =====================
 
-REFERRAL_BONUS_AMOUNT = Decimal('1.4')  # 1.4 olmos
-REFERRAL_BONUS_FLOAT = 1.4
+REFERRAL_BONUS_AMOUNT = Decimal(str(BONUS_AMOUNT))
+REFERRAL_BONUS_FLOAT = BONUS_AMOUNT
 
 
 # ===================== ASOSIY FUNKSIYALAR =====================

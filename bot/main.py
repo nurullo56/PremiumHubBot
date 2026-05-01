@@ -1,5 +1,5 @@
 """Main entry point for PremiumHubBot."""
-
+# bot/main.py
 import asyncio
 import logging
 import signal

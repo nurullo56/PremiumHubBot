@@ -3,10 +3,14 @@
 # ===================== PHONE VALIDATION =====================
 PHONE_PATTERN = r'^\+?998[0-9]{9}$'
 
+# ===================== BALANCE =====================
+BALANCE_SCALE = 100       # 1 olmos = 100 cents (integer precision)
+BALANCE_MAX_OLMOS = 1_000_000  # Maximum allowed balance
+
 # ===================== REFERRAL =====================
 BONUS_AMOUNT = 1.4  # Balance bonus per verified referral (olmos)
-REFERRAL_BONUS_AMOUNT = 1.4  # Duplicate removed, use BONUS_AMOUNT
 MAX_SUSPICIOUS_DAYS = 7  # Days to consider referrals as suspicious
+MAX_BONUS_RETURNS_PER_DAY = 5  # Max bonus returns a referrer can get per day
 
 # ===================== ANTI-FRAUD =====================
 MAX_REFERRALS_PER_HOUR = 5
