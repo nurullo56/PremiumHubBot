@@ -68,16 +68,15 @@ async def ask_subscription(message: Message, state: FSMContext):
 async def check_subscription_callback(callback: CallbackQuery, state: FSMContext, bot: Bot):
     """Check subscription callback - uses new utility."""
     user_id = callback.from_user.id
-    
+
     await callback.answer("🔄 Tekshirilmoqda...", show_alert=False)
-    
-    # Use utility for checking
+
     is_subscribed = await subscription_checker.check_user_subscriptions(bot, user_id)
-    
+
     if is_subscribed:
         await user_repo.update_subscription(user_id, True)
         await callback.message.delete()
-        
+
         await callback.message.answer(
             "✅ <b>Barcha obunalar tasdiqlandi!</b>\n\n"
             "Endi botdan to'liq foydalanishingiz mumkin.\n\n"
@@ -90,6 +89,24 @@ async def check_subscription_callback(callback: CallbackQuery, state: FSMContext
             parse_mode="HTML"
         )
         await state.clear()
+
+        # Referral bonus: give immediately on registration completion
+        user = await user_repo.get_by_id(user_id)
+        if user and user.get('referred_by') and not user.get('referral_bonus_given'):
+            try:
+                from bot.database.repositories.referral_bonus_repo import give_referral_bonus
+                success, msg = await give_referral_bonus(
+                    referrer_id=user['referred_by'],
+                    new_user_id=user_id,
+                    fullname=callback.from_user.full_name,
+                    bot=bot
+                )
+                if success:
+                    logger.info(f"✅ Referral bonus given: {user['referred_by']} <- {user_id}")
+                else:
+                    logger.warning(f"⚠️ Referral bonus skipped: {msg}")
+            except Exception as e:
+                logger.error(f"❌ Referral bonus error on registration: {e}", exc_info=True)
     else:
         await callback.answer(
             "❌ Hali barcha kanallarga obuna bo'lmadingiz!",
