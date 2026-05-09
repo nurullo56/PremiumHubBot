@@ -178,9 +178,9 @@ async def cmd_start(message: Message, state: FSMContext):
             
             if not success:
                 await message.answer(
-                    "❌ <b>Xatolik yuz berdi!</b>\n\n"
-                    "Iltimos, qaytadan urinib ko'ring.\n\n"
-                    "Muammo davom etsa, admin bilan bog'lang: {settings.admin_mention}",
+                    f"❌ <b>Xatolik yuz berdi!</b>\n\n"
+                    f"Iltimos, qaytadan urinib ko'ring.\n\n"
+                    f"Muammo davom etsa, admin bilan bog'lang: {settings.admin_mention}",
                     parse_mode="HTML"
                 )
                 return
@@ -215,9 +215,9 @@ async def cmd_start(message: Message, state: FSMContext):
         # ========== 3. EXISTING USER - CHECK BLOCK STATUS ==========
         if user.get('is_blocked'):
             await message.answer(
-                "🚫 <b>AKKAUNTINGIZ BLOKLANGAN!</b>\n\n"
-                "Sizning akkauntingiz admin tomonidan bloklangan.\n\n"
-                "Savollaringiz bo'lsa, admin bilan bog'lang: {settings.admin_mention}",
+                f"🚫 <b>AKKAUNTINGIZ BLOKLANGAN!</b>\n\n"
+                f"Sizning akkauntingiz admin tomonidan bloklangan.\n\n"
+                f"Savollaringiz bo'lsa, admin bilan bog'lang: {settings.admin_mention}",
                 parse_mode="HTML"
             )
             return
@@ -298,9 +298,9 @@ async def cmd_start(message: Message, state: FSMContext):
     except Exception as e:
         logger.error(f"❌ Start handler error: {e}", exc_info=True)
         await message.answer(
-            "❌ <b>Texnik xatolik yuz berdi!</b>\n\n"
-            "Iltimos, /start buyrug'ini qaytadan bosing.\n\n"
-            "Muammo davom etsa, admin bilan bog'lang: {settings.admin_mention}",
+            f"❌ <b>Texnik xatolik yuz berdi!</b>\n\n"
+            f"Iltimos, /start buyrug'ini qaytadan bosing.\n\n"
+            f"Muammo davom etsa, admin bilan bog'lang: {settings.admin_mention}",
             parse_mode="HTML"
         )
 
