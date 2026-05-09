@@ -28,9 +28,10 @@ class MigrationVersion(IntEnum):
     V7_BALANCE_SCALING = 7
     V8_REMOVE_RATE_LIMIT_FK = 8
     V9_CHANNEL_LEAVE_LOGS = 9
+    V10_CHANNEL_BONUS_TRACKING = 10
 
 
-CURRENT_VERSION = MigrationVersion.V9_CHANNEL_LEAVE_LOGS
+CURRENT_VERSION = MigrationVersion.V10_CHANNEL_BONUS_TRACKING
 
 
 @dataclass(frozen=True)
@@ -210,6 +211,25 @@ async def migration_v6() -> bool:
     return True
 
 
+async def migration_v10() -> bool:
+    """Per-channel bonus tracking jadvalini yaratish."""
+    async with get_db() as db:
+        if not await SchemaValidator.table_exists(db, "channel_bonus_tracking"):
+            await db.execute("""
+                CREATE TABLE channel_bonus_tracking (
+                    user_id    INTEGER NOT NULL,
+                    channel_id TEXT    NOT NULL,
+                    deducted   INTEGER DEFAULT 0,
+                    PRIMARY KEY (user_id, channel_id)
+                )
+            """)
+            await SchemaValidator.create_index(
+                db, "idx_cbt_user", "channel_bonus_tracking", "user_id"
+            )
+        await db.commit()
+    return True
+
+
 async def migration_v9() -> bool:
     """Create channel_leave_logs table."""
     async with get_db() as db:
@@ -351,6 +371,7 @@ MIGRATIONS: list[Migration] = [
     Migration(MigrationVersion.V7_BALANCE_SCALING, "Balance scaling with outbox", migration_v7),
     Migration(MigrationVersion.V8_REMOVE_RATE_LIMIT_FK, "Remove FK from rate_limits and ip_tracking", migration_v8),
     Migration(MigrationVersion.V9_CHANNEL_LEAVE_LOGS, "Create channel_leave_logs table", migration_v9),
+    Migration(MigrationVersion.V10_CHANNEL_BONUS_TRACKING, "Per-channel bonus tracking", migration_v10),
 ]
 
 

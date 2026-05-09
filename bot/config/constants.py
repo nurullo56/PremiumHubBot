@@ -8,9 +8,10 @@ BALANCE_SCALE = 100       # 1 olmos = 100 cents (integer precision)
 BALANCE_MAX_OLMOS = 1_000_000  # Maximum allowed balance
 
 # ===================== REFERRAL =====================
-BONUS_AMOUNT = 1.4  # Balance bonus per verified referral (olmos)
-MAX_SUSPICIOUS_DAYS = 7  # Days to consider referrals as suspicious
-MAX_BONUS_RETURNS_PER_DAY = 5  # Max bonus returns a referrer can get per day
+BONUS_AMOUNT = 1.4          # Bir marta beriladigan referral bonus (olmos)
+CHANNEL_LEAVE_DEDUCTION = 0.2  # Har kanal tark etilganda ayriladigan bonus
+MAX_SUSPICIOUS_DAYS = 7
+MAX_BONUS_RETURNS_PER_DAY = 20
 
 # ===================== ANTI-FRAUD =====================
 MAX_REFERRALS_PER_HOUR = 5

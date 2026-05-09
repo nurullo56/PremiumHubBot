@@ -119,20 +119,69 @@ class ChannelMonitorRepository:
             return False
     
     @staticmethod
-    async def reset_user_bonus_flag(user_id: int) -> bool:
-        """Reset referral bonus flag AND is_subscribed when user leaves channel."""
+    async def reset_user_subscription(user_id: int) -> bool:
+        """User kanaldan chiqqanda faqat is_subscribed=0 qilinadi.
+        referral_bonus_given o'zgartirilmaydi — bonus bir marta beriladi."""
         try:
             async with get_db() as db:
-                await db.execute("""
-                    UPDATE users
-                    SET referral_bonus_given = 0,
-                        is_subscribed = 0
-                    WHERE user_id = ?
-                """, (user_id,))
+                await db.execute(
+                    "UPDATE users SET is_subscribed = 0 WHERE user_id = ?",
+                    (user_id,)
+                )
                 await db.commit()
                 return True
         except Exception as e:
-            logger.error(f"❌ reset_user_bonus_flag error: {e}")
+            logger.error(f"❌ reset_user_subscription error: {e}")
+            return False
+
+    # Eskisi bilan moslik uchun alias
+    reset_user_bonus_flag = reset_user_subscription
+
+    @staticmethod
+    async def is_channel_bonus_deducted(user_id: int, channel_id: str) -> bool:
+        """Bu kanal uchun bonus ayrilganmi?"""
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT deducted FROM channel_bonus_tracking WHERE user_id=? AND channel_id=?",
+                    (user_id, channel_id)
+                )
+                row = await cursor.fetchone()
+                return bool(row["deducted"]) if row else False
+        except Exception as e:
+            logger.error(f"❌ is_channel_bonus_deducted error: {e}")
+            return False
+
+    @staticmethod
+    async def mark_channel_bonus_deducted(user_id: int, channel_id: str) -> bool:
+        """Bu kanal uchun bonus ayrilganligini belgilash."""
+        try:
+            async with get_db() as db:
+                await db.execute("""
+                    INSERT INTO channel_bonus_tracking (user_id, channel_id, deducted)
+                    VALUES (?, ?, 1)
+                    ON CONFLICT(user_id, channel_id) DO UPDATE SET deducted = 1
+                """, (user_id, channel_id))
+                await db.commit()
+                return True
+        except Exception as e:
+            logger.error(f"❌ mark_channel_bonus_deducted error: {e}")
+            return False
+
+    @staticmethod
+    async def clear_channel_bonus_deducted(user_id: int, channel_id: str) -> bool:
+        """Bu kanal uchun bonus qaytarilganligini belgilash."""
+        try:
+            async with get_db() as db:
+                await db.execute("""
+                    INSERT INTO channel_bonus_tracking (user_id, channel_id, deducted)
+                    VALUES (?, ?, 0)
+                    ON CONFLICT(user_id, channel_id) DO UPDATE SET deducted = 0
+                """, (user_id, channel_id))
+                await db.commit()
+                return True
+        except Exception as e:
+            logger.error(f"❌ clear_channel_bonus_deducted error: {e}")
             return False
     
     @staticmethod

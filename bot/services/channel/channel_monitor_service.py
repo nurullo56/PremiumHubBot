@@ -14,12 +14,12 @@ from dataclasses import dataclass
 from aiogram import Bot
 
 from bot.database.repositories.channel_monitor_repo import channel_monitor_repo
-from bot.config.constants import BONUS_AMOUNT, MAX_BONUS_RETURNS_PER_DAY
+from bot.config.constants import CHANNEL_LEAVE_DEDUCTION, MAX_BONUS_RETURNS_PER_DAY
 from bot.utils.common.timezone import now_str
 
 logger = logging.getLogger(__name__)
 
-BONUS_RETURN_AMOUNT = Decimal(str(BONUS_AMOUNT))  # 1.4 olmos
+BONUS_RETURN_AMOUNT = Decimal(str(CHANNEL_LEAVE_DEDUCTION))  # 0.2 olmos har kanal uchun
 
 
 @dataclass
@@ -101,7 +101,7 @@ class ChannelMonitorService:
                     reason="No referrer"
                 )
 
-            # 3. Check bonus was given
+            # 3. Dastlabki bonus berilganmi?
             if not user.get('referral_bonus_given'):
                 return BonusReturnResult(
                     success=False, user_id=user_id, referrer_id=referrer_id,
@@ -109,7 +109,16 @@ class ChannelMonitorService:
                     reason="Bonus not given yet"
                 )
 
-            # 4. Rate limit: max N returns per referrer per day
+            # 4. Bu kanal uchun allaqachon ayrilganmi?
+            already_deducted = await self.repo.is_channel_bonus_deducted(user_id, channel_id)
+            if already_deducted:
+                return BonusReturnResult(
+                    success=False, user_id=user_id, referrer_id=referrer_id,
+                    amount=Decimal('0'), new_balance=Decimal('0'),
+                    reason=f"Already deducted for channel {channel_id}"
+                )
+
+            # 5. Rate limit
             today_returns = await self.repo.get_today_bonus_returns_count(referrer_id)
             if today_returns >= MAX_BONUS_RETURNS_PER_DAY:
                 return BonusReturnResult(
@@ -118,24 +127,22 @@ class ChannelMonitorService:
                     reason=f"Rate limit exceeded (max {MAX_BONUS_RETURNS_PER_DAY}/day)"
                 )
 
-            # 5. Atomic balance deduction + history (single transaction via balance_service)
+            # 6. 0.2 olmos ayirish
             user_fullname = user.get('fullname', 'User')
             deducted, _, new_balance = await balance_service.subtract_balance(
                 user_id=referrer_id,
                 amount=BONUS_RETURN_AMOUNT,
-                description=f"Bonus qaytarildi: {user_fullname} {channel_name} kanalidan chiqdi",
+                description=f"-{BONUS_RETURN_AMOUNT}💎: {user_fullname} «{channel_name}» dan chiqdi",
                 transaction_type="bonus_return"
             )
 
             if not deducted:
-                # Referrer already spent the bonus — get current balance for logging
                 new_balance = await balance_service.get_balance(referrer_id)
-                logger.warning(
-                    f"⚠️ Bonus return skipped (insufficient balance): referrer={referrer_id}"
-                )
+                logger.warning(f"⚠️ Insufficient balance for deduction: referrer={referrer_id}")
 
-            # 6. Reset bonus flag to prevent re-processing on future leaves
-            await self.repo.reset_user_bonus_flag(user_id)
+            # 7. Bu kanal uchun ayrilganligini belgilash + is_subscribed=0
+            await self.repo.mark_channel_bonus_deducted(user_id, channel_id)
+            await self.repo.reset_user_subscription(user_id)
 
             # 7. Audit log
             timestamp = now_str()
@@ -193,11 +200,11 @@ class ChannelMonitorService:
         try:
             text = (
                 f"⚠️ <b>OGOHLANTIRISH!</b>\n\n"
-                f"👤 <b>{user_name}</b> majburiy kanaldan chiqdi!\n"
+                f"👤 <b>{user_name}</b> kanaldan chiqdi!\n"
                 f"📢 Kanal: <b>{channel_name}</b>\n"
-                f"💎 <b>-{BONUS_RETURN_AMOUNT} olmos</b> hisobingizdan yechildi.\n\n"
-                f"💰 Yangi balansingiz: <b>{new_balance:.2f} olmos</b>\n\n"
-                f"💡 Do'stingizni qayta kanalga qo'shilishga undang!"
+                f"💎 <b>-{BONUS_RETURN_AMOUNT} olmos</b> yechildi.\n\n"
+                f"💰 Balansingiz: <b>{new_balance:.2f} olmos</b>\n\n"
+                f"💡 Do'stingiz qayta kirsa bonus qaytariladi!"
             )
             await bot.send_message(referrer_id, text, parse_mode="HTML")
         except Exception as e:

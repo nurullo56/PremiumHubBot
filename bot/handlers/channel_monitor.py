@@ -86,6 +86,7 @@ async def user_joined_channel(event: ChatMemberUpdated, bot: Bot):
     logger.info(f"✅ User {user_id} joined mandatory channel: {channel_name}")
 
     await _auto_complete_registration(user_id, bot)
+    await _restore_per_channel_bonus(user_id, str(chat_id), channel_name or chat_title, bot)
 
 
 async def _auto_complete_registration(user_id: int, bot: Bot) -> None:
@@ -151,6 +152,60 @@ async def _auto_complete_registration(user_id: int, bot: Bot) -> None:
 
     except Exception as e:
         logger.error(f"❌ _auto_complete_registration error for {user_id}: {e}", exc_info=True)
+
+
+async def _restore_per_channel_bonus(user_id: int, channel_id: str, channel_name: str, bot: Bot) -> None:
+    """
+    User kanalga qaytib kirganda 0.2 olmos bonusni referrerga qaytaradi.
+    Faqat shu kanal uchun oldindan ayrilgan bo'lsa ishlaydi.
+    """
+    try:
+        from bot.database.repositories.channel_monitor_repo import channel_monitor_repo
+        from bot.services.finance.balance_service import balance_service
+        from decimal import Decimal
+        from bot.config.constants import CHANNEL_LEAVE_DEDUCTION
+
+        db_user = await user_repo.get_by_id(user_id)
+        if not db_user or not db_user.get('referral_bonus_given'):
+            return
+
+        referrer_id = db_user.get('referred_by')
+        if not referrer_id:
+            return
+
+        was_deducted = await channel_monitor_repo.is_channel_bonus_deducted(user_id, channel_id)
+        if not was_deducted:
+            return
+
+        referrer = await user_repo.get_by_id(referrer_id)
+        if not referrer or referrer.get('is_blocked'):
+            return
+
+        amount = Decimal(str(CHANNEL_LEAVE_DEDUCTION))
+        success, _, new_balance = await balance_service.add_balance(
+            user_id=referrer_id,
+            amount=amount,
+            description=f"+{amount}💎: {db_user.get('fullname', 'User')} «{channel_name}» ga qaytdi",
+            transaction_type="bonus_restore"
+        )
+
+        if success:
+            await channel_monitor_repo.clear_channel_bonus_deducted(user_id, channel_id)
+            logger.info(f"✅ Bonus restored: referrer={referrer_id} +{amount} <- user={user_id} channel={channel_id}")
+            try:
+                await bot.send_message(
+                    referrer_id,
+                    f"✅ <b>Bonus qaytarildi!</b>\n\n"
+                    f"👤 <b>{db_user.get('fullname', 'Foydalanuvchi')}</b> «{channel_name}» ga qaytib kirdi!\n"
+                    f"💎 <b>+{amount} olmos</b> qo'shildi.\n"
+                    f"💰 Balansingiz: <b>{float(new_balance):.2f} olmos</b>",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+
+    except Exception as e:
+        logger.error(f"❌ _restore_per_channel_bonus error for {user_id}: {e}", exc_info=True)
 
 
 __all__ = ["router"]
