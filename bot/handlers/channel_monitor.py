@@ -12,6 +12,11 @@ from aiogram.types import ChatMemberUpdated
 from aiogram.filters import IS_NOT_MEMBER, IS_MEMBER, ChatMemberUpdatedFilter
 
 from bot.services.channel.channel_monitor_service import channel_monitor_service
+from bot.database.repositories.user_repo import user_repo
+from bot.database.repositories.balance_repo import balance_repo
+from bot.database.repositories.join_request_repo import JoinRequestRepository
+from bot.utils.subscription_checker import subscription_checker
+from bot.keyboards.user.main_menu import get_main_keyboard
 
 logger = logging.getLogger(__name__)
 router = Router(name="channel_monitor")
@@ -42,13 +47,17 @@ async def user_left_channel(event: ChatMemberUpdated, bot: Bot):
     logger.warning(f"⚠️ User {user_id} left mandatory channel: {channel_name}")
     
     # Process bonus return (via service)
+    # Managed kanaldan chiqqanda join_requests DB ni tozala
+    # (subscription fallback check uchun, API ishlamasa ham to'g'ri ko'rsatsin)
+    await JoinRequestRepository.clear_request(user_id, str(chat_id))
+
     result = await channel_monitor_service.process_bonus_return(
         user_id=user_id,
         channel_id=str(chat_id),
         channel_name=channel_name or chat_title,
         bot=bot
     )
-    
+
     if result.success:
         logger.info(f"✅ Bonus returned: user={user_id}, referrer={result.referrer_id}")
     else:
@@ -63,32 +72,85 @@ async def user_joined_channel(event: ChatMemberUpdated, bot: Bot):
     """
     user_id = event.from_user.id
     chat_id = event.chat.id
-    chat_title = event.chat.title or "Kanal"
     chat_username = event.chat.username
-    
+
     logger.info(f"👋 User joined: user={user_id}, chat={chat_id}")
-    
-    # Check if channel is mandatory (via service)
+
     is_mandatory, channel_name = await channel_monitor_service.is_mandatory_channel(
         chat_id, chat_username
     )
-    
+
     if not is_mandatory:
         return
-    
+
     logger.info(f"✅ User {user_id} joined mandatory channel: {channel_name}")
-    
-    # Send welcome message (via bot directly - no DB needed)
+
+    await _auto_complete_registration(user_id, bot)
+
+
+async def _auto_complete_registration(user_id: int, bot: Bot) -> None:
+    """
+    Foydalanuvchi kanalga qo'shilganda chaqiriladi.
+    Ikki holat uchun ishlaydi:
+      1. Yangi user — ro'yxatdan o'tayotgan (phone bor, is_subscribed=False)
+      2. Qaytuvchi user — avval chiqib ketgan (is_subscribed=False, referral_bonus_given=0)
+    """
     try:
+        db_user = await user_repo.get_by_id(user_id)
+
+        # Foydalanuvchi yo'q yoki allaqachon to'liq obuna — hech narsa qilma
+        if not db_user or not db_user.get('phone'):
+            return
+        if db_user.get('is_subscribed'):
+            return
+
+        # Hamma kanallarga obuna bo'lganini tekshir
+        all_subscribed = await subscription_checker.check_user_subscriptions(bot, user_id)
+        if not all_subscribed:
+            return
+
+        # Obunani tasdiqlash
+        await user_repo.update_subscription(user_id, True)
+        logger.info(f"✅ Subscription confirmed: {user_id}")
+
+        # Referral bonus berish (yangi ham, qaytuvchi ham)
+        if db_user.get('referred_by') and not db_user.get('referral_bonus_given'):
+            try:
+                referrer_id = db_user['referred_by']
+                referrer = await user_repo.get_by_id(referrer_id)
+                if not referrer or referrer.get('is_blocked'):
+                    logger.warning(f"⚠️ Referrer unavailable ({referrer_id}) — skipping bonus")
+                else:
+                    from bot.database.repositories.referral_bonus_repo import give_referral_bonus
+                    success, _ = await give_referral_bonus(
+                        referrer_id=referrer_id,
+                        new_user_id=user_id,
+                        fullname=db_user.get('fullname', 'Foydalanuvchi'),
+                        bot=bot
+                    )
+                    if success:
+                        logger.info(f"✅ Referral bonus given: {referrer_id} <- {user_id}")
+            except Exception as e:
+                logger.error(f"❌ Referral bonus error: {e}")
+
+        # Foydalanuvchiga xabar yuborish
+        balance = await balance_repo.get_balance(user_id)
+        fullname = db_user.get('fullname', 'Foydalanuvchi')
+        from bot.config import settings
+
         await bot.send_message(
             user_id,
-            f"👋 <b>Xush kelibsiz!</b>\n\n"
-            f"Siz <b>{channel_name}</b> kanaliga qo'shildingiz.\n\n"
-            f"💡 Kanalda qolish orqali bonuslaringizni saqlab qolasiz!",
+            f"✅ <b>Barcha obunalar tasdiqlandi!</b>\n\n"
+            f"👋 Xush kelibsiz, {fullname}!\n"
+            f"💰 Balansingiz: {float(balance):.2f} 💎\n\n"
+            f"🎁 <b>Bonus olish uchun:</b>\n"
+            f"\"✨BEPUL PREMIUM OLISH💫\" tugmasini bosing!",
+            reply_markup=get_main_keyboard(is_admin=settings.is_admin(user_id)),
             parse_mode="HTML"
         )
+
     except Exception as e:
-        logger.warning(f"Failed to send welcome message: {e}")
+        logger.error(f"❌ _auto_complete_registration error for {user_id}: {e}", exc_info=True)
 
 
 __all__ = ["router"]

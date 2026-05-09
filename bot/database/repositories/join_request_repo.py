@@ -46,6 +46,41 @@ class JoinRequestRepository:
             return None
     
     @staticmethod
+    async def get_chat_by_title(title: str) -> Optional[Dict[str, Any]]:
+        """Find managed chat by fullname (for ID mismatch correction)."""
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT * FROM managed_chats WHERE fullname = ? AND is_active = 1",
+                    (title,)
+                )
+                row = await cursor.fetchone()
+                return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"❌ Failed to get managed chat by title '{title}': {e}")
+            return None
+
+    @staticmethod
+    async def fix_chat_id(old_id: str, new_id: str) -> bool:
+        """Correct a wrong chat_id in managed_chats and join_requests."""
+        try:
+            async with get_db() as db:
+                await db.execute(
+                    "UPDATE managed_chats SET chat_id = ? WHERE chat_id = ?",
+                    (new_id, old_id)
+                )
+                await db.execute(
+                    "UPDATE join_requests SET chat_id = ? WHERE chat_id = ?",
+                    (new_id, old_id)
+                )
+                await db.commit()
+                logger.info(f"✅ Chat ID corrected: {old_id} → {new_id}")
+                return True
+        except Exception as e:
+            logger.error(f"❌ Failed to fix chat_id {old_id} → {new_id}: {e}")
+            return False
+
+    @staticmethod
     async def get_all_active_chats() -> List[Dict[str, Any]]:
         try:
             async with get_db() as db:
@@ -72,6 +107,21 @@ class JoinRequestRepository:
             logger.error(f"❌ Failed to create join request for {user_id}: {e}")
             return False
     
+    @staticmethod
+    async def clear_request(user_id: int, chat_id: str) -> bool:
+        """User kanaldan chiqqanda has_requested=0 qilib belgilash."""
+        try:
+            async with get_db() as db:
+                await db.execute(
+                    "UPDATE join_requests SET has_requested = 0 WHERE user_id = ? AND chat_id = ?",
+                    (user_id, str(chat_id))
+                )
+                await db.commit()
+                return True
+        except Exception as e:
+            logger.error(f"❌ Failed to clear join request for {user_id}: {e}")
+            return False
+
     @staticmethod
     async def get_request(user_id: int, chat_id: str) -> Optional[Dict[str, Any]]:
         try:

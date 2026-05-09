@@ -1,4 +1,4 @@
-# bot/utils/bot/_instance.py
+# bot/utils/bot/instance.py
 """Global bot instance manager for accessing bot from anywhere."""
 
 import logging

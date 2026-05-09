@@ -87,24 +87,15 @@ class FraudRepository:
     async def track_ip(user_id: int, ip_address: str, timestamp: str) -> bool:
         try:
             async with get_db() as db:
-                cursor = await db.execute(
-                    "SELECT id FROM ip_tracking WHERE ip_address = ? AND user_id = ?",
-                    (ip_address, user_id)
-                )
-                existing = await cursor.fetchone()
-                
-                if existing:
-                    await db.execute("""
-                        UPDATE ip_tracking 
-                        SET request_count = request_count + 1, last_seen = ?
-                        WHERE ip_address = ? AND user_id = ?
-                    """, (timestamp, ip_address, user_id))
-                else:
-                    await db.execute("""
-                        INSERT INTO ip_tracking (ip_address, user_id, first_seen, last_seen, request_count)
-                        VALUES (?, ?, ?, ?, 1)
-                    """, (ip_address, user_id, timestamp, timestamp))
-                
+                # Single atomic upsert — no separate SELECT needed.
+                # Requires UNIQUE(ip_address, user_id) on ip_tracking table.
+                await db.execute("""
+                    INSERT INTO ip_tracking (ip_address, user_id, first_seen, last_seen, request_count)
+                    VALUES (?, ?, ?, ?, 1)
+                    ON CONFLICT(ip_address, user_id) DO UPDATE SET
+                        request_count = request_count + 1,
+                        last_seen = excluded.last_seen
+                """, (ip_address, user_id, timestamp, timestamp))
                 await db.commit()
                 return True
         except Exception as e:

@@ -61,14 +61,15 @@ async def handle_contact_phone(message: Message, state: FSMContext):
     """Telefon raqam qabul qilish (contact tugma orqali)"""
     user_id = message.from_user.id
     phone = message.contact.phone_number
-    
+
     normalized = normalize_phone(phone)
-    
-    # Multi-akkaunt tekshiruvi
-    phone_exists, existing_user_id = await user_repo.phone_exists(normalized)
-    
-    if phone_exists and existing_user_id != user_id:
-        logger.warning(f"🚫 MULTI-AKKAUNT! Telefon: {normalized}, Mavjud: {existing_user_id}, Yangi: {user_id}")
+
+    from bot.utils.common.timezone import now_str
+    success, conflict_id = await user_repo.update_phone_atomic(user_id, normalized, now_str())
+
+    if not success:
+        if conflict_id and conflict_id != user_id:
+            logger.warning(f"🚫 MULTI-AKKAUNT! Telefon: {normalized}, Mavjud: {conflict_id}, Yangi: {user_id}")
         await message.answer(
             "🚫 <b>Xatolik!</b>\n\n"
             f"Bu telefon raqami (<code>{normalized}</code>) allaqachon "
@@ -77,37 +78,40 @@ async def handle_contact_phone(message: Message, state: FSMContext):
             parse_mode="HTML"
         )
         return
-    
-    await user_repo.update(user_id, {'phone': normalized, 'last_phone_update': None})
+
     logger.info(f"✅ Telefon saqlandi: {user_id} -> {normalized}")
-    
+
     await message.answer("✅ Telefon raqami saqlandi!")
     await state.clear()
-    
-    # Keyingi bosqich: subscription yoki main menu
+    await _proceed_after_phone(user_id, message)
+
+
+async def _proceed_after_phone(user_id: int, message: Message) -> None:
+    """After phone is saved: check subscription or show main menu."""
     from bot.handlers.registration.subscription import check_subscription
     from bot.services.channel.channel_service import channel_service
-    
+
     channels = await channel_service.get_active_channels()
-    
+
     if channels:
-        # Kanallar bor — subscription check
-        await check_subscription(user_id, message, message.bot)
-    else:
-        # Kanallar yo'q — to'g'ridan-to'g'ri main menu
-        await user_repo.update_subscription(user_id, True)
-        balance = await balance_repo.get_balance(user_id)
-        fullname = message.from_user.full_name
-        
-        await message.answer(
-            f"✅ <b>Ro'yxatdan o'tish tugallandi!</b>\n\n"
-            f"👋 Xush kelibsiz, {fullname}!\n"
-            f"💰 Balansingiz: {float(balance):.2f} 💎\n\n"
-            f"🎁 <b>Bonus olish uchun:</b>\n"
-            f"\"✨BEPUL PREMIUM OLISH💫\" tugmasini bosing!",
-            reply_markup=get_main_keyboard(),
-            parse_mode="HTML"
-        )
+        already_subscribed = await check_subscription(user_id, message, message.bot)
+        if not already_subscribed:
+            return  # subscription.py will show the subscription prompt
+
+    # Reach here when: no channels, OR user already subscribed to all
+    await user_repo.update_subscription(user_id, True)
+    balance = await balance_repo.get_balance(user_id)
+    fullname = message.from_user.full_name
+
+    await message.answer(
+        f"✅ <b>Ro'yxatdan o'tish tugallandi!</b>\n\n"
+        f"👋 Xush kelibsiz, {fullname}!\n"
+        f"💰 Balansingiz: {float(balance):.2f} 💎\n\n"
+        f"🎁 <b>Bonus olish uchun:</b>\n"
+        f"\"✨BEPUL PREMIUM OLISH💫\" tugmasini bosing!",
+        reply_markup=get_main_keyboard(),
+        parse_mode="HTML"
+    )
 
 
 @router.message(RegistrationStates.waiting_for_phone, F.text)
@@ -123,12 +127,13 @@ async def handle_text_phone(message: Message, state: FSMContext):
         return
     
     normalized = normalize_phone(phone)
-    
-    # Multi-akkaunt tekshiruvi
-    phone_exists, existing_user_id = await user_repo.phone_exists(normalized)
-    
-    if phone_exists and existing_user_id != user_id:
-        logger.warning(f"🚫 MULTI-AKKAUNT! Telefon: {normalized}")
+
+    from bot.utils.common.timezone import now_str
+    success, conflict_id = await user_repo.update_phone_atomic(user_id, normalized, now_str())
+
+    if not success:
+        if conflict_id and conflict_id != user_id:
+            logger.warning(f"🚫 MULTI-AKKAUNT! Telefon: {normalized}, Mavjud: {conflict_id}, Yangi: {user_id}")
         await message.answer(
             "🚫 <b>Xatolik!</b>\n\n"
             f"Bu telefon raqami (<code>{normalized}</code>) allaqachon "
@@ -137,37 +142,12 @@ async def handle_text_phone(message: Message, state: FSMContext):
             parse_mode="HTML"
         )
         return
-    
-    await user_repo.update(user_id, {'phone': normalized, 'last_phone_update': None})
+
     logger.info(f"✅ Telefon saqlandi: {user_id} -> {normalized}")
-    
+
     await message.answer("✅ Telefon raqami saqlandi!")
     await state.clear()
-    
-    # Keyingi bosqich: subscription yoki main menu
-    from bot.handlers.registration.subscription import check_subscription
-    from bot.services.channel.channel_service import channel_service
-    
-    channels = await channel_service.get_active_channels()
-    
-    if channels:
-        # Kanallar bor — subscription check
-        await check_subscription(user_id, message, message.bot)
-    else:
-        # Kanallar yo'q — to'g'ridan-to'g'ri main menu
-        await user_repo.update_subscription(user_id, True)
-        balance = await balance_repo.get_balance(user_id)
-        fullname = message.from_user.full_name
-        
-        await message.answer(
-            f"✅ <b>Ro'yxatdan o'tish tugallandi!</b>\n\n"
-            f"👋 Xush kelibsiz, {fullname}!\n"
-            f"💰 Balansingiz: {float(balance):.2f} 💎\n\n"
-            f"🎁 <b>Bonus olish uchun:</b>\n"
-            f"\"✨BEPUL PREMIUM OLISH💫\" tugmasini bosing!",
-            reply_markup=get_main_keyboard(),
-            parse_mode="HTML"
-        )
+    await _proceed_after_phone(user_id, message)
 
 
 __all__ = ["router", "check_phone", "ask_phone", "handle_contact_phone", "handle_text_phone"]

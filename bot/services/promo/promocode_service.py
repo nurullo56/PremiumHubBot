@@ -36,12 +36,11 @@ class PromocodeService:
                 code = self.generate_code()
                 now = datetime.now().isoformat()
                 expiry = (datetime.now() + timedelta(days=expiry_days)).isoformat() if expiry_days else None
-                
-                # Get user info if not provided
+
                 if not fullname:
                     user = await uow.users.get_by_id(user_id)
                     fullname = user.get('fullname', 'Unknown') if user else 'Unknown'
-                
+
                 success = await uow.promocodes.create(
                     code=code,
                     user_id=user_id,
@@ -53,17 +52,17 @@ class PromocodeService:
                     expiry_date=expiry,
                     usage_limit=usage_limit
                 )
-                
-                if success:
-                    await uow.commit()
-                    logger.info(f"✅ Promocode created: {code}")
-                    return True, code
-                
-                return False, ""
-                
+
+                if not success:
+                    return False, ""
+
             except Exception as e:
                 logger.error(f"Failed to create promocode: {e}")
                 return False, ""
+
+            await uow.commit()
+            logger.info(f"✅ Promocode created: {code}")
+            return True, code
     
     async def use_promocode(
         self, 
@@ -78,42 +77,37 @@ class PromocodeService:
         """
         async with UnitOfWork() as uow:
             try:
-                # Get promocode
                 promocode = await uow.promocodes.get_by_code(code)
-                
+
                 if not promocode:
                     return False, "❌ Promokod topilmadi!", None
-                
-                # Check if used
+
                 if promocode.get('is_used'):
                     return False, "❌ Bu promokod allaqachon ishlatilgan!", None
-                
-                # Check expiry
+
                 if promocode.get('expiry_date'):
                     expiry = datetime.fromisoformat(promocode['expiry_date'])
                     if expiry < datetime.now():
                         return False, "❌ Promokod muddati o'tgan!", None
-                
-                # Check usage limit
+
                 usage_count = promocode.get('usage_count', 0)
                 usage_limit = promocode.get('usage_limit', 1)
                 if usage_count >= usage_limit:
                     return False, "❌ Promokod limiti tugagan!", None
-                
-                # Mark as used
+
                 now = datetime.now().isoformat()
                 success = await uow.promocodes.mark_used(code, user_id, now)
-                
-                if success:
-                    await uow.commit()
-                    logger.info(f"✅ Promocode used: {code} by {user_id}")
-                    return True, "✅ Promokod muvaffaqiyatli qo'llandi!", promocode
-                
-                return False, "❌ Xatolik yuz berdi!", None
-                
+
+                if not success:
+                    return False, "❌ Xatolik yuz berdi!", None
+
             except Exception as e:
                 logger.error(f"Failed to use promocode: {e}")
                 return False, f"❌ Xatolik: {str(e)}", None
+
+            await uow.commit()
+            logger.info(f"✅ Promocode used: {code} by {user_id}")
+            return True, "✅ Promokod muvaffaqiyatli qo'llandi!", promocode
     
     async def get_user_promocodes(self, user_id: int) -> List[Dict[str, Any]]:
         """Get all promocodes created by user."""

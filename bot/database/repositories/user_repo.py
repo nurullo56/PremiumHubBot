@@ -128,6 +128,46 @@ class UserRepository:
         except Exception as e:
             logger.error(f"❌ Failed to update phone for {user_id}: {e}")
             return False
+
+    @staticmethod
+    async def update_phone_atomic(
+        user_id: int, phone: str, timestamp: str
+    ) -> Tuple[bool, Optional[int]]:
+        """
+        Atomically assign phone to user only when no other user holds it.
+
+        Returns:
+            (True, None)          — success
+            (False, other_id)     — another user already has this phone
+            (False, None)         — unexpected DB error
+        """
+        try:
+            async with get_db() as db:
+                cursor = await db.execute("""
+                    UPDATE users
+                    SET phone = ?, last_phone_update = ?
+                    WHERE user_id = ?
+                      AND NOT EXISTS (
+                          SELECT 1 FROM users
+                          WHERE phone = ? AND user_id != ?
+                      )
+                """, (phone, timestamp, user_id, phone, user_id))
+                await db.commit()
+
+                if cursor.rowcount > 0:
+                    logger.info(f"✅ Phone atomically set for user {user_id}")
+                    return True, None
+
+                # Find the conflicting owner
+                cursor = await db.execute(
+                    "SELECT user_id FROM users WHERE phone = ? AND user_id != ?",
+                    (phone, user_id)
+                )
+                row = await cursor.fetchone()
+                return False, row['user_id'] if row else None
+        except Exception as e:
+            logger.error(f"❌ Failed to atomically update phone for {user_id}: {e}")
+            return False, None
     
     @staticmethod
     async def update_gender(user_id: int, gender: str) -> bool:
@@ -216,6 +256,8 @@ class UserRepository:
                 await db.execute("DELETE FROM join_requests WHERE user_id = ?", (user_id,))
                 await db.execute("DELETE FROM fraud_logs WHERE user_id = ?", (user_id,))
                 await db.execute("DELETE FROM promocodes WHERE user_id = ?", (user_id,))
+                await db.execute("DELETE FROM rate_limits WHERE user_id = ?", (user_id,))
+                await db.execute("DELETE FROM ip_tracking WHERE user_id = ?", (user_id,))
                 await db.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
                 await db.commit()
                 logger.info(f"✅ User deleted permanently: {user_id}")

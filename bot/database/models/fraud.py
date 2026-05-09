@@ -38,11 +38,10 @@ async def init_fraud_tables() -> None:
                     request_count INTEGER DEFAULT 1,
                     first_request TEXT NOT NULL,
                     last_request TEXT NOT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id),
                     UNIQUE(user_id, action_type)
                 )
             """)
-            
+
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS ip_tracking (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,8 +50,7 @@ async def init_fraud_tables() -> None:
                     first_seen TEXT NOT NULL,
                     last_seen TEXT NOT NULL,
                     request_count INTEGER DEFAULT 1,
-                    is_suspicious INTEGER DEFAULT 0,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                    is_suspicious INTEGER DEFAULT 0
                 )
             """)
             

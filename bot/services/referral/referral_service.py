@@ -6,8 +6,13 @@ from decimal import Decimal
 
 from bot.database.repositories.referral_repo import referral_repo
 from bot.database.repositories.user_repo import user_repo
+from bot.database.repositories.referral_bonus_repo import (
+    give_referral_bonus,
+    get_active_referrals_count,
+)
 from bot.services.finance.balance_service import balance_service
 from bot.config.constants import BONUS_AMOUNT, TRANSACTION_REFERRAL_BONUS
+from bot.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +79,10 @@ class ReferralService:
     async def process_bonus(self, user_id: int, fullname: str, bot) -> bool:
         """Process referral bonus."""
         try:
-            from bot.database.repositories.referral_bonus_repo import give_referral_bonus
-            
             user = await user_repo.get_by_id(user_id)
             if not user or not user.get('referred_by'):
                 return False
-            
+
             referrer_id = user['referred_by']
             success, _ = await give_referral_bonus(referrer_id, user_id, fullname, bot)
             return success
@@ -90,14 +93,11 @@ class ReferralService:
     async def get_status(self, user_id: int) -> dict:
         """Get referral status."""
         try:
-            from bot.database.repositories.referral_bonus_repo import get_active_referrals_count
-            from bot.config import settings
-            
             count = await get_active_referrals_count(user_id)
             required = settings.required_referrals
             remaining = max(required - count, 0)
             percent = min(int(count / required * 100), 100)
-            
+
             return {
                 'count': count,
                 'link': f"https://t.me/{settings.bot_username}?start={user_id}",

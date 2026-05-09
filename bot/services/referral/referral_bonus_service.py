@@ -37,34 +37,28 @@ class ReferralBonusService:
             Tuple[bool, Decimal]: (success, bonus_amount)
         """
         try:
-            # Bonus allaqachon berilganligini tekshirish
+            # Atomically claim the bonus slot: only the first concurrent call succeeds.
+            # UPDATE...WHERE first_purchase_bonus_given = 0 acts as a test-and-set;
+            # rowcount == 0 means another request already claimed it.
             async with get_db() as db:
                 cursor = await db.execute(
-                    "SELECT first_purchase_bonus_given FROM users WHERE user_id = ?",
+                    "UPDATE users SET first_purchase_bonus_given = 1 "
+                    "WHERE user_id = ? AND first_purchase_bonus_given = 0",
                     (buyer_id,)
                 )
-                result = await cursor.fetchone()
-                
-                if result and result.get('first_purchase_bonus_given'):
+                await db.commit()
+                if cursor.rowcount == 0:
                     logger.info(f"⚠️ First purchase bonus already given: {buyer_id}")
                     return False, Decimal('0')
-            
-            # Bonus berish
+
+            # Bonus berish (flag already set — safe to retry balance if it fails)
             success, _, _ = await balance_service.add_balance(
                 referrer_id,
                 FIRST_PURCHASE_BONUS,
                 f"Birinchi xarid bonusi: user {buyer_id}"
             )
-            
+
             if success:
-                # Bonus berilganligini belgilash
-                async with get_db() as db:
-                    await db.execute(
-                        "UPDATE users SET first_purchase_bonus_given = 1 WHERE user_id = ?",
-                        (buyer_id,)
-                    )
-                    await db.commit()
-                
                 logger.info(f"✅ First purchase bonus: {referrer_id} +{FIRST_PURCHASE_BONUS}💎 (from {buyer_id})")
                 
                 # Xabar yuborish

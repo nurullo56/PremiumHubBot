@@ -1,12 +1,18 @@
 """Captcha keyboard."""
 
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 
 
-def get_captcha_keyboard(captcha_url: str) -> InlineKeyboardMarkup:
-    """Captcha WebApp keyboard."""
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🔐 Captcha o'tish", web_app={"url": captcha_url})]
-        ]
+def get_captcha_keyboard(captcha_url: str) -> ReplyKeyboardMarkup:
+    """Captcha WebApp keyboard.
+
+    ReplyKeyboard ishlatilishi shart — faqat KeyboardButton bilan
+    web_app_data xabari botga yetib keladi (InlineKeyboard bilan kelmaydi).
+    """
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🔐 Captcha o'tish", web_app=WebAppInfo(url=captcha_url))]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True,
     )

@@ -18,16 +18,30 @@ class ChannelMonitorRepository:
     
     @staticmethod
     async def get_mandatory_channels() -> List[Dict[str, Any]]:
-        """Get all active mandatory channels."""
+        """Get all active mandatory channels — both public and managed (zayavka)."""
         try:
             async with get_db() as db:
+                # Oddiy kanallar
                 cursor = await db.execute("""
-                    SELECT channel_id, channel_name, channel_url, is_active
-                    FROM channels 
+                    SELECT channel_id, channel_name, channel_url
+                    FROM channels
                     WHERE is_active = 1
                 """)
                 rows = await cursor.fetchall()
-                return [dict(row) for row in rows]
+                result = [dict(row) for row in rows]
+
+                # Zayavka (managed) kanallar
+                cursor = await db.execute("""
+                    SELECT chat_id AS channel_id,
+                           fullname  AS channel_name,
+                           invite_link AS channel_url
+                    FROM managed_chats
+                    WHERE is_active = 1
+                """)
+                rows = await cursor.fetchall()
+                result += [dict(row) for row in rows]
+
+                return result
         except Exception as e:
             logger.error(f"❌ get_mandatory_channels error: {e}")
             return []
@@ -106,11 +120,13 @@ class ChannelMonitorRepository:
     
     @staticmethod
     async def reset_user_bonus_flag(user_id: int) -> bool:
-        """Reset user's referral bonus flag."""
+        """Reset referral bonus flag AND is_subscribed when user leaves channel."""
         try:
             async with get_db() as db:
                 await db.execute("""
-                    UPDATE users SET referral_bonus_given = 0
+                    UPDATE users
+                    SET referral_bonus_given = 0,
+                        is_subscribed = 0
                     WHERE user_id = ?
                 """, (user_id,))
                 await db.commit()

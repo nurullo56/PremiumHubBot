@@ -92,7 +92,7 @@ async def add_chat_start(message: Message, state: FSMContext):
     )
 
 
-@router.message(AddChatStates.waiting_for_chat_id)
+@router.message(IsAdmin(), AddChatStates.waiting_for_chat_id)
 async def add_chat_receive_id(message: Message, state: FSMContext):
     """Receive chat ID."""
     if message.text == "❌ Bekor qilish":
@@ -102,11 +102,11 @@ async def add_chat_receive_id(message: Message, state: FSMContext):
             reply_markup=get_admin_main_keyboard()
         )
         return
-    
+
     chat_id = message.text.strip()
-    
+
     # Validate chat ID format
-    if not (chat_id.startswith('-100') and chat_id[4:].isdigit()):
+    if not (chat_id.startswith('-100') and len(chat_id) > 4 and chat_id[4:].isdigit()):
         await message.answer(
             "❌ Noto'g'ri format!\n\n"
             "Chat ID <code>-100</code> bilan boshlanishi kerak.\n"
@@ -115,7 +115,7 @@ async def add_chat_receive_id(message: Message, state: FSMContext):
             parse_mode="HTML"
         )
         return
-    
+
     # Check if already exists
     existing = await join_request_repo.get_chat(chat_id)
     if existing:
@@ -145,7 +145,7 @@ async def add_chat_receive_id(message: Message, state: FSMContext):
     )
 
 
-@router.message(AddChatStates.waiting_for_invite_link)
+@router.message(IsAdmin(), AddChatStates.waiting_for_invite_link)
 async def add_chat_receive_invite_link(message: Message, state: FSMContext):
     """Receive invite link."""
     if message.text == "❌ Bekor qilish":
@@ -184,7 +184,7 @@ async def add_chat_receive_invite_link(message: Message, state: FSMContext):
     )
 
 
-@router.message(AddChatStates.waiting_for_fullname)
+@router.message(IsAdmin(), AddChatStates.waiting_for_fullname)
 async def add_chat_receive_fullname(message: Message, state: FSMContext):
     """Receive chat fullname."""
     if message.text == "❌ Bekor qilish":
@@ -217,7 +217,7 @@ async def add_chat_receive_fullname(message: Message, state: FSMContext):
     )
 
 
-@router.message(AddChatStates.waiting_for_description)
+@router.message(IsAdmin(), AddChatStates.waiting_for_description)
 async def add_chat_receive_description(message: Message, state: FSMContext):
     """Receive description and save chat."""
     if message.text == "❌ Bekor qilish":
@@ -303,7 +303,7 @@ async def delete_chat_start(message: Message, state: FSMContext):
     await message.answer(text, reply_markup=get_cancel_keyboard(), parse_mode="HTML")
 
 
-@router.message(DeleteChatStates.waiting_for_chat_id)
+@router.message(IsAdmin(), DeleteChatStates.waiting_for_chat_id)
 async def delete_chat_receive_id(message: Message, state: FSMContext):
     """Delete chat by ID."""
     if message.text == "❌ Bekor qilish":

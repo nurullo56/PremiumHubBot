@@ -98,18 +98,9 @@ async def give_referral_bonus(
             # Xabar yuborish (agar bot berilgan bo'lsa)
             if bot:
                 try:
-                    message_text = (
-                        f"🎉 <b>Yangi bonus!</b>\n\n"
-                        f"👤 {fullname} ro'yxatdan o'tdi!\n"
-                        f"💎 +{REFERRAL_BONUS_AMOUNT} olmos hisobingizga qo'shildi!\n\n"
-                        f"Davom eting! 🚀"
-                    )
-                    
-                    await bot.send_message(
-                        referrer_id,
-                        message_text,
-                        parse_mode="HTML"
-                    )
+                    from bot.data.bonus_messages import get_random_bonus_message
+                    message_text = get_random_bonus_message(fullname)
+                    await bot.send_message(referrer_id, message_text, parse_mode="HTML")
                     logger.info(f"✅ Xabar yuborildi: {referrer_id}")
                 except Exception as e:
                     logger.error(f"❌ Xabar yuborishda xato: {e}")

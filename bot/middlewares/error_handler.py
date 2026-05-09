@@ -4,7 +4,7 @@ import logging
 from typing import Callable, Dict, Any, Awaitable
 
 from aiogram import BaseMiddleware
-from aiogram.types import Update, ErrorEvent
+from aiogram.types import Update, ErrorEvent, Message, CallbackQuery
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +43,13 @@ class ErrorHandlerMiddleware(BaseMiddleware):
                 pass
             
             try:
-                if event.message:
-                    await event.message.answer(
+                if isinstance(event, Message):
+                    await event.answer(
                         "⚠️ Xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.\n"
                         "Agar muammo takrorlansa, admin bilan bog'laning."
                     )
-                elif event.callback_query:
-                    await event.callback_query.answer(
+                elif isinstance(event, CallbackQuery):
+                    await event.answer(
                         "⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.",
                         show_alert=True
                     )

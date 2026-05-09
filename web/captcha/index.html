@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Telegram Premium</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .serif-font { font-family: 'Playfair Display', serif; }
+        .bg-telegram-dark { background: radial-gradient(circle at top, #0d1b31 0%, #020b1d 100%); }
+        .btn-gradient { background: linear-gradient(90deg, #00c38b 0%, #00e6a1 100%); }
+        .star-purple { color: #b549ff; filter: drop-shadow(0 0 8px rgba(181,73,255,0.6)); }
+
+        .page { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; }
+        .active { display: flex; animation: fadeIn 0.4s ease-out; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.98); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50%       { transform: translateY(-8px); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+
+        .animate-float { animation: float 4s ease-in-out infinite; }
+        .shake { animation: shake 0.4s ease-in-out; }
+
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+
+        #result-toast {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            opacity: 0;
+            transform: translateY(12px);
+        }
+        #result-toast.show { opacity: 1; transform: translateY(0); }
+
+        /* Refresh tugmasi aylanishi */
+        .spin { animation: spin 0.5s ease-in-out; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="relative w-[360px] h-[740px] bg-telegram-dark rounded-[50px] shadow-[0_0_60px_rgba(0,0,0,0.7)] overflow-hidden border-[10px] border-zinc-950">
+
+    <!-- Orqa fon effektlari -->
+    <div class="absolute top-[-50px] left-[-50px] w-64 h-64 bg-blue-600/10 rounded-full blur-[80px] pointer-events-none"></div>
+    <div class="absolute bottom-20 right-[-50px] w-48 h-48 bg-purple-600/10 rounded-full blur-[60px] pointer-events-none"></div>
+
+    <!-- ═══════════ 1-SAHIFA: LANDING ═══════════ -->
+    <div id="landing-page" class="page active pt-20 px-10">
+        <div class="text-center mb-10">
+            <h1 class="serif-font text-[52px] leading-tight text-white italic">Telegram</h1>
+            <h2 class="text-[32px] font-extrabold tracking-[0.25em] text-white -mt-2">PREMIUM</h2>
+        </div>
+        <p class="text-sm font-medium text-blue-200/40 mb-16 text-center">Yangi imkoniyatlar seni kutmoqda!</p>
+
+        <div class="flex items-center justify-between w-full mb-20 animate-float">
+            <div class="text-white">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.44 8.184l-2.061 9.723c-.155.683-.56.85-.1.478l-3.136-2.308-1.513 1.458c-.167.167-.308.308-.633.308l.225-3.195 5.816-5.252c.253-.225-.054-.35-.389-.127l-7.189 4.526-3.098-.968c-.673-.21-.686-.673.14-.997l12.115-4.673c.56-.21 1.05.126.85.997z"/>
+                </svg>
+            </div>
+            <svg class="star-purple" width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            <svg class="text-white opacity-60" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            <svg class="star-purple" width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            <div class="text-white/80 bg-white/10 p-2 rounded-xl backdrop-blur-sm">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+            </div>
+        </div>
+
+        <div class="w-full mt-auto mb-28 flex justify-center">
+            <button onclick="goToVerification()"
+                class="w-[90%] py-4 rounded-[22px] btn-gradient text-white font-bold text-lg shadow-[0_12px_25px_rgba(0,195,139,0.3)] active:scale-95 transition-all uppercase tracking-wide">
+                Ro'yxatdan o'tish
+            </button>
+        </div>
+    </div>
+
+    <!-- ═══════════ 2-SAHIFA: VERIFICATION ═══════════ -->
+    <div id="verification-page" class="page pt-16 px-8">
+        <div class="text-center mb-8">
+            <h1 class="serif-font text-[40px] leading-tight text-white italic">Telegram</h1>
+            <h2 class="text-[28px] font-extrabold tracking-[0.2em] text-white -mt-1">PREMIUM</h2>
+        </div>
+        <p class="text-xs font-medium text-gray-500 mb-10">Yangi imkoniyatlar seni kutmoqda!</p>
+
+        <!-- KARTA -->
+        <div class="w-full bg-[#0a192f] rounded-[35px] p-7 flex flex-col items-center shadow-2xl border border-white/5">
+            <p class="text-[13px] font-semibold text-gray-400 mb-5">Matematik amalini bajaring:</p>
+
+            <!-- Masala + refresh -->
+            <div class="flex items-center gap-3 mb-8">
+                <h3 id="math-question" class="text-4xl font-bold text-white tracking-widest"></h3>
+                <button id="refresh-btn" onclick="refreshProblem()"
+                    class="text-gray-500 hover:text-emerald-400 transition-colors active:scale-90 ml-1"
+                    title="Yangi masala">
+                    <svg id="refresh-icon" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="flex items-center w-full gap-2 mb-6">
+                <input id="answer-input" type="number" placeholder="Javobni yozing"
+                    class="w-full bg-[#0d2141] text-white px-5 py-4 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm transition-all border border-white/5"
+                    onkeydown="if(event.key==='Enter') checkAnswer()">
+            </div>
+
+            <button onclick="checkAnswer()"
+                class="w-[90%] py-3.5 rounded-[20px] btn-gradient text-white font-bold text-base shadow-lg active:scale-95 transition-all uppercase tracking-wide">
+                Tasdiqlash
+            </button>
+        </div>
+
+        <!-- TOAST -->
+        <div id="result-toast"
+            class="hidden w-full p-4 rounded-[22px] flex items-start gap-3 mt-6 shadow-xl border">
+            <div id="toast-icon-bg" class="rounded-full p-1 mt-0.5 shrink-0 text-white">
+                <svg id="toast-icon" width="14" height="14" viewBox="0 0 20 20" fill="currentColor"></svg>
+            </div>
+            <p id="toast-text" class="text-[11px] leading-[1.4] font-bold"></p>
+        </div>
+    </div>
+
+    <div class="absolute bottom-2 left-1/2 -translate-x-1/2 w-28 h-1 bg-white/10 rounded-full"></div>
+</div>
+
+<script>
+    // ─── Telegram WebApp ───────────────────────────────────────────
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+        tg.ready();
+        tg.expand();
+    }
+
+    // ─── Masala generatori ─────────────────────────────────────────
+    const OPS = [
+        { symbol: '+', fn: (a, b) => a + b },
+        { symbol: '-', fn: (a, b) => a - b },
+        { symbol: '×', fn: (a, b) => a * b },
+    ];
+
+    let correctAnswer = null;
+
+    function randInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateProblem() {
+        const op = OPS[randInt(0, OPS.length - 1)];
+        let a, b;
+
+        if (op.symbol === '-') {
+            // Manfiy natija chiqmasligi uchun
+            a = randInt(5, 15);
+            b = randInt(1, a);
+        } else if (op.symbol === '×') {
+            // Ko'paytma katta bo'lmasin
+            a = randInt(2, 9);
+            b = randInt(2, 9);
+        } else {
+            a = randInt(1, 15);
+            b = randInt(1, 15);
+        }
+
+        return {
+            text: `${a} ${op.symbol} ${b} = ?`,
+            answer: op.fn(a, b),
+        };
+    }
+
+    function loadProblem() {
+        const problem = generateProblem();
+        correctAnswer = problem.answer;
+        document.getElementById('math-question').textContent = problem.text;
+        document.getElementById('answer-input').value = '';
+        hideToast();
+    }
+
+    function refreshProblem() {
+        const icon = document.getElementById('refresh-icon');
+        icon.classList.add('spin');
+        icon.addEventListener('animationend', () => icon.classList.remove('spin'), { once: true });
+        loadProblem();
+        document.getElementById('answer-input').focus();
+    }
+
+    // ─── Sahifalar ────────────────────────────────────────────────
+    function goToVerification() {
+        showPage('verification-page');
+        loadProblem();
+        setTimeout(() => document.getElementById('answer-input').focus(), 400);
+    }
+
+    function showPage(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    // ─── Toast ────────────────────────────────────────────────────
+    function showToast({ bg, border, textColor, text, iconBg, iconPath }) {
+        const toast    = document.getElementById('result-toast');
+        const toastTxt = document.getElementById('toast-text');
+        const iconBgEl = document.getElementById('toast-icon-bg');
+        const iconEl   = document.getElementById('toast-icon');
+
+        toast.style.backgroundColor = bg;
+        toast.style.borderColor     = border;
+        toastTxt.style.color        = textColor;
+        toastTxt.textContent        = text;
+        iconBgEl.style.backgroundColor = iconBg;
+        iconEl.innerHTML            = iconPath;
+
+        toast.classList.remove('hidden');
+        requestAnimationFrame(() => toast.classList.add('show'));
+    }
+
+    function hideToast() {
+        const toast = document.getElementById('result-toast');
+        toast.classList.remove('show');
+        toast.classList.add('hidden');
+    }
+
+    // ─── Tekshirish ───────────────────────────────────────────────
+    function checkAnswer() {
+        const val = document.getElementById('answer-input').value.trim();
+        if (val === '') return;
+
+        if (parseInt(val, 10) === correctAnswer) {
+            showToast({
+                bg: '#e9e5d7', border: 'rgba(0,195,139,0.2)',
+                textColor: '#18181b',
+                text: "Sizning so'rovingiz botga yuborildi, javobni bot orqali olasiz!",
+                iconBg: '#00c38b',
+                iconPath: '<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>',
+            });
+
+            // Telegram botga yuborish
+            setTimeout(() => {
+                if (tg) {
+                    tg.sendData('verified');
+                } else {
+                    // Brauzerda test uchun
+                    console.log('✅ Captcha passed (browser test)');
+                }
+            }, 800);
+
+        } else {
+            showToast({
+                bg: '#fee2e2', border: 'rgba(239,68,68,0.2)',
+                textColor: '#991b1b',
+                text: "Noto'g'ri javob! Iltimos, qaytadan urinib ko'ring.",
+                iconBg: '#ef4444',
+                iconPath: '<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>',
+            });
+
+            // Input larzaga keltirish
+            const input = document.getElementById('answer-input');
+            input.classList.add('shake');
+            input.addEventListener('animationend', () => input.classList.remove('shake'), { once: true });
+
+            // Yangi masala 1.5 soniyadan keyin
+            setTimeout(() => {
+                loadProblem();
+                document.getElementById('answer-input').focus();
+            }, 1500);
+        }
+    }
+</script>
+
+</body>
+</html>

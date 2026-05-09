@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     sentry_dsn: str = Field(default="", description="Sentry DSN for error tracking")
     environment: str = Field(default="production", description="Environment name")
 
+    # ===================== WEBHOOK =====================
+    use_webhook: bool = Field(default=False, description="Use webhook instead of polling")
+    webhook_host: str = Field(default="", description="Public HTTPS URL, e.g. https://yourdomain.com")
+    webapp_host: str = Field(default="0.0.0.0", description="Web server listen host")
+    webapp_port: int = Field(default=8080, description="Web server listen port")
+
     # ===================== CACHE (Future) =====================
     # redis_host: str = Field(default="localhost", description="Redis host")
     # redis_port: int = Field(default=6379, description="Redis port")
@@ -69,16 +75,18 @@ class Settings(BaseSettings):
         """Parse admin IDs from comma-separated string."""
         if not self.admin_id:
             return []
-        
-        try:
-            return [
-                int(id_str.strip())
-                for id_str in self.admin_id.split(",")
-                if id_str.strip().isdigit()
-            ]
-        except (ValueError, AttributeError):
-            logger.error(f"Failed to parse admin_id: {self.admin_id}")
-            return []
+
+        valid_ids: List[int] = []
+        for id_str in self.admin_id.split(","):
+            id_str = id_str.strip()
+            if not id_str.isdigit():
+                continue
+            parsed = int(id_str)
+            if not (0 < parsed < 10_000_000_000):
+                logger.warning(f"⚠️ Admin ID out of valid Telegram range, skipped: {parsed}")
+                continue
+            valid_ids.append(parsed)
+        return valid_ids
 
     @property
     def first_admin_id(self) -> int:
@@ -90,6 +98,18 @@ class Settings(BaseSettings):
     def db_full_path(self) -> Path:
         """Get absolute database path."""
         return Path(self.db_path).absolute()
+
+    @property
+    def webhook_path(self) -> str:
+        """Webhook path — token hash for security."""
+        import hashlib
+        token_hash = hashlib.sha256(self.bot_token.encode()).hexdigest()[:32]
+        return f"/webhook/{token_hash}"
+
+    @property
+    def webhook_url(self) -> str:
+        """Full public webhook URL to register with Telegram."""
+        return f"{self.webhook_host.rstrip('/')}{self.webhook_path}"
 
     @property
     def admin_mention(self) -> str:
@@ -104,15 +124,19 @@ class Settings(BaseSettings):
     @classmethod
     def validate_bot_token(cls, v: str) -> str:
         """Validate bot token format."""
-        # Allow test tokens for testing
-        if v.startswith("test_"):
-            return v
-        
         if not v or v == "your_bot_token_here":
             raise ValueError("BOT_TOKEN must be set in .env file")
-        if ":" not in v:
+        if ":" not in v and not v.startswith("test_"):
             raise ValueError("Invalid BOT_TOKEN format")
         return v
+
+    def validate_token_for_environment(self) -> None:
+        """Raise if a test token is used outside of test/development mode."""
+        if self.bot_token.startswith("test_") and self.environment == "production":
+            raise RuntimeError(
+                "❌ Test BOT_TOKEN detected in production environment. "
+                "Set a real token or change ENVIRONMENT in .env."
+            )
 
     @field_validator("admin_id")
     @classmethod
@@ -133,6 +157,12 @@ class Settings(BaseSettings):
         errors = []
         warnings = []
 
+        # Reject test tokens in production before anything else
+        try:
+            self.validate_token_for_environment()
+        except RuntimeError as e:
+            errors.append(str(e))
+
         # Critical checks
         if not self.bot_token or self.bot_token == "your_bot_token_here":
             errors.append("BOT_TOKEN is not properly configured")
@@ -142,6 +172,12 @@ class Settings(BaseSettings):
 
         if not self.admin_ids:
             errors.append("No valid ADMIN_ID found")
+
+        if self.use_webhook and not self.webhook_host:
+            errors.append("WEBHOOK_HOST must be set when USE_WEBHOOK=true")
+
+        if self.use_webhook and self.webhook_host and not self.webhook_host.startswith("https://"):
+            errors.append("WEBHOOK_HOST must start with https://")
 
         # Non-critical warnings
         if not self.admin_username:

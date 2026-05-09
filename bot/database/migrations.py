@@ -26,9 +26,11 @@ class MigrationVersion(IntEnum):
     V5_MILESTONE_NOTIFIED = 5
     V6_FIRST_PURCHASE_BONUS = 6
     V7_BALANCE_SCALING = 7
+    V8_REMOVE_RATE_LIMIT_FK = 8
+    V9_CHANNEL_LEAVE_LOGS = 9
 
 
-CURRENT_VERSION = MigrationVersion.V7_BALANCE_SCALING
+CURRENT_VERSION = MigrationVersion.V9_CHANNEL_LEAVE_LOGS
 
 
 @dataclass(frozen=True)
@@ -208,6 +210,83 @@ async def migration_v6() -> bool:
     return True
 
 
+async def migration_v9() -> bool:
+    """Create channel_leave_logs table."""
+    async with get_db() as db:
+        if not await SchemaValidator.table_exists(db, "channel_leave_logs"):
+            await db.execute("""
+                CREATE TABLE channel_leave_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    channel_id TEXT NOT NULL,
+                    channel_name TEXT,
+                    referrer_id INTEGER,
+                    bonus_returned INTEGER DEFAULT 0,
+                    returned_at TEXT NOT NULL
+                )
+            """)
+            await SchemaValidator.create_index(db, "idx_leave_logs_user", "channel_leave_logs", "user_id")
+            await SchemaValidator.create_index(db, "idx_leave_logs_referrer", "channel_leave_logs", "referrer_id, bonus_returned, returned_at")
+        await db.commit()
+    return True
+
+
+async def migration_v8() -> bool:
+    """Remove FK constraints from rate_limits and ip_tracking.
+
+    These tables must accept rows for users who haven't registered yet
+    (rate limiting runs before user creation). SQLite can't DROP CONSTRAINT,
+    so we rebuild both tables.
+    """
+    async with get_db() as db:
+        # --- rate_limits ---
+        await db.execute("ALTER TABLE rate_limits RENAME TO rate_limits_old")
+        await db.execute("""
+            CREATE TABLE rate_limits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                action_type TEXT NOT NULL,
+                request_count INTEGER DEFAULT 1,
+                first_request TEXT NOT NULL,
+                last_request TEXT NOT NULL,
+                UNIQUE(user_id, action_type)
+            )
+        """)
+        await db.execute("""
+            INSERT INTO rate_limits (id, user_id, action_type, request_count, first_request, last_request)
+            SELECT id, user_id, action_type, request_count, first_request, last_request
+            FROM rate_limits_old
+        """)
+        await db.execute("DROP TABLE rate_limits_old")
+
+        # --- ip_tracking ---
+        await db.execute("ALTER TABLE ip_tracking RENAME TO ip_tracking_old")
+        await db.execute("""
+            CREATE TABLE ip_tracking (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ip_address TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                first_seen TEXT NOT NULL,
+                last_seen TEXT NOT NULL,
+                request_count INTEGER DEFAULT 1,
+                is_suspicious INTEGER DEFAULT 0
+            )
+        """)
+        await db.execute("""
+            INSERT INTO ip_tracking (id, ip_address, user_id, first_seen, last_seen, request_count, is_suspicious)
+            SELECT id, ip_address, user_id, first_seen, last_seen, request_count, is_suspicious
+            FROM ip_tracking_old
+        """)
+        await db.execute("DROP TABLE ip_tracking_old")
+
+        await SchemaValidator.create_index(db, "idx_rate_limit_user", "rate_limits", "user_id")
+        await SchemaValidator.create_index(db, "idx_ip_tracking_address", "ip_tracking", "ip_address")
+        await SchemaValidator.create_index(db, "idx_ip_tracking_suspicious", "ip_tracking", "is_suspicious")
+
+        await db.commit()
+    return True
+
+
 async def migration_v7() -> bool:
     """Balance scaling system + outbox pattern. One connection, one transaction."""
     async with get_db() as db:
@@ -270,6 +349,8 @@ MIGRATIONS: list[Migration] = [
     Migration(MigrationVersion.V5_MILESTONE_NOTIFIED, "Add milestone notifications", migration_v5),
     Migration(MigrationVersion.V6_FIRST_PURCHASE_BONUS, "Add first purchase bonus", migration_v6),
     Migration(MigrationVersion.V7_BALANCE_SCALING, "Balance scaling with outbox", migration_v7),
+    Migration(MigrationVersion.V8_REMOVE_RATE_LIMIT_FK, "Remove FK from rate_limits and ip_tracking", migration_v8),
+    Migration(MigrationVersion.V9_CHANNEL_LEAVE_LOGS, "Create channel_leave_logs table", migration_v9),
 ]
 
 

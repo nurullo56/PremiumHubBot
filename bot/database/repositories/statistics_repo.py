@@ -93,50 +93,48 @@ class StatisticsRepository:
     async def get_daily_users_chart(days: int = 7) -> List[Dict[str, Any]]:
         """Kunlik userlar grafigi"""
         try:
+            async with get_db() as db:
+                cursor = await db.execute("""
+                    SELECT DATE(registration_date) AS date, COUNT(*) AS count
+                    FROM users
+                    WHERE DATE(registration_date) >= DATE('now', ?)
+                    GROUP BY DATE(registration_date)
+                    ORDER BY date ASC
+                """, (f'-{days} days',))
+                rows = await cursor.fetchall()
+
+            # Fill in any missing days with 0 so the chart always has `days` points
+            date_map = {row['date']: row['count'] for row in rows}
             result = []
-            
-            for i in range(days):
+            for i in range(days - 1, -1, -1):
                 date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-                
-                async with get_db() as db:
-                    cursor = await db.execute(
-                        "SELECT COUNT(*) as count FROM users WHERE DATE(registration_date) = ?",
-                        (date,)
-                    )
-                    count = (await cursor.fetchone())['count']
-                    
-                    result.append({
-                        'date': date,
-                        'count': count
-                    })
-            
-            return list(reversed(result))
+                result.append({'date': date, 'count': date_map.get(date, 0)})
+            return result
         except Exception as e:
             logger.error(f"❌ Failed to get daily users chart: {e}")
             return []
-    
+
     @staticmethod
     async def get_daily_active_chart(days: int = 7) -> List[Dict[str, Any]]:
         """Kunlik aktiv userlar grafigi"""
         try:
+            async with get_db() as db:
+                cursor = await db.execute("""
+                    SELECT DATE(last_activity) AS date, COUNT(*) AS active_count
+                    FROM users
+                    WHERE DATE(last_activity) >= DATE('now', ?)
+                      AND is_blocked = 0
+                    GROUP BY DATE(last_activity)
+                    ORDER BY date ASC
+                """, (f'-{days} days',))
+                rows = await cursor.fetchall()
+
+            date_map = {row['date']: row['active_count'] for row in rows}
             result = []
-            
-            for i in range(days):
+            for i in range(days - 1, -1, -1):
                 date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-                
-                async with get_db() as db:
-                    cursor = await db.execute(
-                        "SELECT COUNT(*) as count FROM users WHERE DATE(last_activity) = ? AND is_blocked = 0",
-                        (date,)
-                    )
-                    count = (await cursor.fetchone())['count']
-                    
-                    result.append({
-                        'date': date,
-                        'active_count': count
-                    })
-            
-            return list(reversed(result))
+                result.append({'date': date, 'active_count': date_map.get(date, 0)})
+            return result
         except Exception as e:
             logger.error(f"❌ Failed to get daily active chart: {e}")
             return []

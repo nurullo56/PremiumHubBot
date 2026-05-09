@@ -9,6 +9,7 @@ from aiogram.types import ChatJoinRequest
 
 from bot.database.repositories.join_request_repo import join_request_repo
 from bot.database.repositories.user_repo import user_repo
+from bot.handlers.channel_monitor import _auto_complete_registration
 
 logger = logging.getLogger(__name__)
 router = Router(name="join_request_handler")
@@ -127,11 +128,21 @@ async def handle_join_request(request: ChatJoinRequest, bot: Bot):
         if chat_info:
             chat_type = chat_info.get('chat_type', 'managed')
             chat_name = chat_info.get('fullname', chat_title)
-            # Auto-approve for managed chats
             auto_approve = True
             logger.info(f"📊 Chat type: {chat_type}, name: {chat_name}")
         else:
-            logger.info(f"ℹ️ Chat {chat_id} not in managed chats database")
+            # Channel not found by ID — maybe wrong ID was saved in admin panel.
+            # Try to find by title and fix the ID automatically.
+            chat_by_title = await join_request_repo.get_chat_by_title(chat_title)
+            if chat_by_title:
+                old_id = chat_by_title['chat_id']
+                await join_request_repo.fix_chat_id(old_id, chat_id)
+                chat_type = chat_by_title.get('chat_type', 'managed')
+                chat_name = chat_by_title.get('fullname', chat_title)
+                auto_approve = True
+                logger.info(f"🔧 Chat ID corrected: {old_id} → {chat_id}, name: {chat_name}")
+            else:
+                logger.info(f"ℹ️ Chat {chat_id} not in managed chats database")
         
         # 2. Auto-approve if managed chat
         status = "pending"
@@ -172,6 +183,8 @@ async def handle_join_request(request: ChatJoinRequest, bot: Bot):
         # 4. Send notification to user
         if approved:
             await send_welcome_message(bot, user_id, chat_name, chat_type)
+            # Auto-check: complete registration if all channels now joined
+            await _auto_complete_registration(user_id, bot)
         else:
             await send_pending_message(bot, user_id, chat_name)
         

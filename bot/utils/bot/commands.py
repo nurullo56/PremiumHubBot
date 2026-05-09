@@ -1,4 +1,4 @@
-# bot/utils/common/bot_commands.py
+# bot/utils/common/commands.py
 """Bot commands setup for Telegram menu."""
 
 import logging

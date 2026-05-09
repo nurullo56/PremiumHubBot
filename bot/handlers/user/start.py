@@ -48,7 +48,12 @@ async def extract_referrer_id(message: Message, user_id: int) -> Optional[int]:
     
     try:
         ref_id = int(args[1])
-        
+
+        # Reject IDs outside the valid Telegram user range
+        if not (0 < ref_id < 10_000_000_000):
+            logger.warning(f"⚠️ Out-of-range referrer ID ignored: {ref_id}")
+            return None
+
         # Self-referral check
         if ref_id == user_id:
             logger.warning(f"❌ Self-referral attempt: {user_id}")
@@ -112,9 +117,10 @@ async def is_registration_complete(user_id: int) -> tuple[bool, Optional[str]]:
         logger.debug(f"User {user_id} needs phone")
         return False, 'phone'
     
-    # Check subscription (only if there are active channels)
-    channels = await channel_service.get_active_channels()
-    if channels and not user.get('is_subscribed'):
+    # Check subscription — ikkala jadval (channels + managed_chats) tekshiriladi
+    from bot.utils.subscription_checker import subscription_checker
+    all_channels = await subscription_checker.get_all_mandatory_channels()
+    if all_channels and not user.get('is_subscribed'):
         logger.debug(f"User {user_id} needs subscription")
         return False, 'subscription'
     
@@ -174,7 +180,7 @@ async def cmd_start(message: Message, state: FSMContext):
                 await message.answer(
                     "❌ <b>Xatolik yuz berdi!</b>\n\n"
                     "Iltimos, qaytadan urinib ko'ring.\n\n"
-                    "Muammo davom etsa, admin bilan bog'lang: @SokinQalb",
+                    "Muammo davom etsa, admin bilan bog'lang: {settings.admin_mention}",
                     parse_mode="HTML"
                 )
                 return
@@ -211,7 +217,7 @@ async def cmd_start(message: Message, state: FSMContext):
             await message.answer(
                 "🚫 <b>AKKAUNTINGIZ BLOKLANGAN!</b>\n\n"
                 "Sizning akkauntingiz admin tomonidan bloklangan.\n\n"
-                "Savollaringiz bo'lsa, admin bilan bog'lang: @SokinQalb",
+                "Savollaringiz bo'lsa, admin bilan bog'lang: {settings.admin_mention}",
                 parse_mode="HTML"
             )
             return
@@ -280,12 +286,12 @@ async def cmd_start(message: Message, state: FSMContext):
 • "👑TOP reyting" - Reytingda qatnashing
 
 ━━━━━━━━━━━━━━━━━━━━
-📞 <b>Admin bilan bog'lanish:</b> @SokinQalb
+📞 <b>Admin bilan bog'lanish:</b> {settings.admin_mention}
 """
         
         await message.answer(
             welcome_text,
-            reply_markup=get_main_keyboard(),
+            reply_markup=get_main_keyboard(is_admin=settings.is_admin(message.from_user.id)),
             parse_mode="HTML"
         )
         
@@ -294,7 +300,7 @@ async def cmd_start(message: Message, state: FSMContext):
         await message.answer(
             "❌ <b>Texnik xatolik yuz berdi!</b>\n\n"
             "Iltimos, /start buyrug'ini qaytadan bosing.\n\n"
-            "Muammo davom etsa, admin bilan bog'lang: @SokinQalb",
+            "Muammo davom etsa, admin bilan bog'lang: {settings.admin_mention}",
             parse_mode="HTML"
         )
 
@@ -325,7 +331,7 @@ async def back_to_main_menu(message: Message, state: FSMContext):
     
     await message.answer(
         text,
-        reply_markup=get_main_keyboard(),
+        reply_markup=get_main_keyboard(is_admin=settings.is_admin(message.from_user.id)),
         parse_mode="HTML"
     )
 
@@ -342,7 +348,7 @@ async def cancel_handler(message: Message, state: FSMContext):
         await message.answer(
             "❌ <b>Bekor qilinadigan jarayon yo'q</b>\n\n"
             "Siz asosiy menyudasiz.",
-            reply_markup=get_main_keyboard(),
+            reply_markup=get_main_keyboard(is_admin=settings.is_admin(message.from_user.id)),
             parse_mode="HTML"
         )
         return
@@ -351,7 +357,7 @@ async def cancel_handler(message: Message, state: FSMContext):
     await message.answer(
         "✅ <b>Jarayon bekor qilindi</b>\n\n"
         "Asosiy menyuga qaytdingiz.",
-        reply_markup=get_main_keyboard(),
+        reply_markup=get_main_keyboard(is_admin=settings.is_admin(message.from_user.id)),
         parse_mode="HTML"
     )
 

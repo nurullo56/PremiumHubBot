@@ -41,8 +41,12 @@ async def show_premium_requests(message: Message):
 @router.callback_query(F.data.startswith("premium_view:"))
 async def view_premium_request(callback: CallbackQuery):
     """View premium request details."""
-    user_id = int(callback.data.split(":")[1])
-    
+    try:
+        user_id = int(callback.data.split(":")[1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Noto'g'ri ma'lumot!", show_alert=True)
+        return
+
     user = await user_repo.get_by_id(user_id)
     
     if not user:
@@ -78,7 +82,11 @@ async def view_premium_request(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("premium_approve:"))
 async def approve_premium_request(callback: CallbackQuery):
     """Approve premium request."""
-    user_id = int(callback.data.split(":")[1])
+    try:
+        user_id = int(callback.data.split(":")[1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Noto'g'ri ma'lumot!", show_alert=True)
+        return
     
     success = await premium_service.approve_premium(user_id)
     
@@ -122,7 +130,11 @@ async def approve_premium_request(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("premium_reject:"))
 async def reject_premium_request(callback: CallbackQuery):
     """Reject premium request."""
-    user_id = int(callback.data.split(":")[1])
+    try:
+        user_id = int(callback.data.split(":")[1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Noto'g'ri ma'lumot!", show_alert=True)
+        return
     
     success = await premium_service.reject_premium(user_id)
     
@@ -166,8 +178,9 @@ async def reject_premium_request(callback: CallbackQuery):
 async def back_to_premium_requests(callback: CallbackQuery):
     """Back to premium requests list."""
     requests = await premium_service.get_pending_requests()
-    
+
     if not requests:
+        await callback.answer()
         await callback.message.edit_text(
             "📭 <b>PREMIUM SO'ROVLAR</b>\n\n"
             "Hozircha so'rovlar yo'q.",

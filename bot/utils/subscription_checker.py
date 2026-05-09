@@ -2,7 +2,6 @@
 Subscription check utility - clean separation of concerns.
 Handles checking user subscriptions across all mandatory channels.
 """
-
 import logging
 import asyncio
 from typing import Optional, List, Dict
@@ -10,7 +9,7 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from bot.database.repositories.channel_repo import channel_repo
-from bot.database.repositories.join_request_repo import join_request_repo
+from bot.database.repositories.join_request_repo import join_request_repo, JoinRequestRepository
 
 logger = logging.getLogger(__name__)
 
@@ -109,36 +108,53 @@ class SubscriptionChecker:
         Returns:
             Dict with subscription status and channel info
         """
+        channel_id = channel['channel_id']
+        channel_name = channel['channel_name']
+        channel_url = channel['channel_url']
+        channel_type = channel.get('type', 'unknown')
+
+        base = {
+            'channel_id': channel_id,
+            'channel_name': channel_name,
+            'channel_url': channel_url,
+            'type': channel_type,
+        }
+
+        # Managed (zayavka) kanallar uchun:
+        # Avval Telegram API orqali haqiqiy a'zolikni tekshir.
+        # DB (has_requested) faqat API ishlamasa fallback sifatida.
+        if channel_type == 'managed':
+            try:
+                member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
+                is_subscribed = member.status not in ["left", "kicked"]
+                if not is_subscribed:
+                    logger.info(f"❌ User {user_id} not a member of managed channel {channel_name}")
+                return {**base, 'subscribed': is_subscribed}
+            except Exception as e:
+                logger.error(f"❌ API check error for managed channel {channel_id}: {e}")
+
+            # Fallback: DB da join request bor bo'lsa o'tkazib yubor
+            try:
+                req = await JoinRequestRepository.get_request(user_id, str(channel_id))
+                if req and req.get('has_requested', False):
+                    logger.info(f"⚠️ API failed, using DB fallback for {channel_name}")
+                    return {**base, 'subscribed': True}
+            except Exception as e:
+                logger.error(f"❌ DB fallback error for managed channel {channel_id}: {e}")
+
+            return {**base, 'subscribed': False}
+
+        # For public channels: check Telegram API
         try:
-            channel_id = channel['channel_id']
-            channel_name = channel['channel_name']
-            channel_url = channel['channel_url']
-            
             member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
-            
             is_subscribed = member.status not in ["left", "kicked"]
-            
             if not is_subscribed:
                 logger.info(f"❌ User {user_id} not subscribed to {channel_name}")
-            
-            return {
-                'subscribed': is_subscribed,
-                'channel_id': channel_id,
-                'channel_name': channel_name,
-                'channel_url': channel_url,
-                'type': channel.get('type', 'unknown')
-            }
-            
+            return {**base, 'subscribed': is_subscribed}
+
         except Exception as e:
-            logger.error(f"❌ Channel {channel.get('channel_id')} check error: {e}")
-            # Default to not subscribed for safety
-            return {
-                'subscribed': False,
-                'channel_id': channel.get('channel_id'),
-                'channel_name': channel.get('channel_name', 'Unknown'),
-                'channel_url': channel.get('channel_url', ''),
-                'type': channel.get('type', 'unknown')
-            }
+            logger.error(f"❌ Channel {channel_id} check error: {e}")
+            return {**base, 'subscribed': False}
     
     async def get_subscription_keyboard(
         self, 
