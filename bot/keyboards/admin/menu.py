@@ -32,7 +32,8 @@ def get_admin_main_keyboard() -> ReplyKeyboardMarkup:
                 KeyboardButton(text="➖ Zayavka o'chirish")
             ],
             [
-                KeyboardButton(text="🔍 Chat ID aniqlash")
+                KeyboardButton(text="🔍 Chat ID aniqlash"),
+                KeyboardButton(text="🔗 Ref havola")
             ],
             [KeyboardButton(text="🔙 Orqaga")]
         ],

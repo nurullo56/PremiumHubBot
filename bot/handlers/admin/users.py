@@ -537,6 +537,66 @@ async def admin_back_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+# ==================== REF HAVOLA ====================
+
+@router.message(IsAdmin(), F.text == "🔗 Ref havola")
+async def ref_link_start(message: Message, state: FSMContext):
+    """Admin uchun ref havola yaratish."""
+    await state.set_state(UserManagementStates.waiting_for_ref_user_id)
+    await message.answer(
+        "🔗 <b>REF HAVOLA YARATISH</b>\n\n"
+        "Havola yaratmoqchi bo'lgan foydalanuvchining <b>ID</b> sini yuboring:\n\n"
+        "<i>Masalan: 123456789</i>\n\n"
+        "❌ Bekor qilish uchun /cancel yuboring.",
+        reply_markup=get_admin_main_keyboard(),
+        parse_mode="HTML"
+    )
+
+
+@router.message(UserManagementStates.waiting_for_ref_user_id)
+async def ref_link_receive_id(message: Message, state: FSMContext):
+    """User ID qabul qilib ref havola yaratish."""
+    if message.text in ["❌ Bekor qilish", "/cancel"]:
+        await state.clear()
+        await message.answer("❌ Bekor qilindi.", reply_markup=get_admin_main_keyboard())
+        return
+
+    try:
+        user_id = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Noto'g'ri format! Faqat raqam kiriting:")
+        return
+
+    user = await user_repo.get_by_id(user_id)
+
+    ref_link = f"https://t.me/{settings.bot_username}?start={user_id}"
+
+    if user:
+        referrals = await referral_service.get_referral_count(user_id)
+        name = user.get('fullname', 'N/A')
+        username = f"@{user.get('username')}" if user.get('username') else "yo'q"
+        text = (
+            f"🔗 <b>REF HAVOLA</b>\n\n"
+            f"👤 Ism: <b>{name}</b>\n"
+            f"📱 Username: {username}\n"
+            f"🆔 ID: <code>{user_id}</code>\n"
+            f"👥 Hozirgi referallar: <b>{referrals}</b> ta\n\n"
+            f"🔗 <b>Havola:</b>\n"
+            f"<code>{ref_link}</code>"
+        )
+    else:
+        text = (
+            f"⚠️ <b>Bu ID bazada yo'q</b>, lekin havola yaratildi:\n\n"
+            f"🔗 <b>Havola:</b>\n"
+            f"<code>{ref_link}</code>\n\n"
+            f"<i>Foydalanuvchi bu havola orqali ro'yxatdan o'tganda uning refi hisoblanadi.</i>"
+        )
+
+    await state.clear()
+    await message.answer(text, parse_mode="HTML")
+    logger.info(f"Admin {message.from_user.id} created ref link for user {user_id}")
+
+
 # ==================== ERROR HANDLER ====================
 
 @router.errors()
