@@ -121,19 +121,20 @@ class SubscriptionChecker:
         }
 
         # Managed (zayavka) kanallar uchun:
-        # Avval Telegram API orqali haqiqiy a'zolikni tekshir.
-        # DB (has_requested) faqat API ishlamasa fallback sifatida.
+        # 1. API orqali haqiqiy a'zolikni tekshir
+        # 2. A'zo bo'lmasa — join request yuborgan bo'lsa o'tkazib yubor
         if channel_type == 'managed':
+            api_is_member = False
             try:
                 member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
-                is_subscribed = member.status not in ["left", "kicked"]
-                if not is_subscribed:
-                    logger.info(f"❌ User {user_id} not a member of managed channel {channel_name}")
-                return {**base, 'subscribed': is_subscribed}
+                api_is_member = member.status not in ["left", "kicked"]
             except Exception as e:
                 logger.error(f"❌ API check error for managed channel {channel_id}: {e}")
 
-            # Fallback: user join request yuborgan bo'lsa obuna hisoblash
+            if api_is_member:
+                return {**base, 'subscribed': True}
+
+            # A'zo emas — join request yuborgan bo'lsa o'tkazib yubor
             try:
                 req = await JoinRequestRepository.get_request(user_id, str(channel_id))
                 if req and req.get('has_requested', False):
@@ -142,6 +143,7 @@ class SubscriptionChecker:
             except Exception as e:
                 logger.error(f"❌ DB fallback error for managed channel {channel_id}: {e}")
 
+            logger.info(f"❌ User {user_id} not subscribed to managed channel {channel_name}")
             return {**base, 'subscribed': False}
 
         # For public channels: check Telegram API
