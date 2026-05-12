@@ -186,30 +186,33 @@ class SubscriptionChecker:
             ]
             results = await asyncio.gather(*tasks)
             
-            # Build keyboard for unsubscribed channels
-            keyboard = []
-            not_subscribed = False
-            
-            for result in results:
-                if not result['subscribed']:
-                    not_subscribed = True
-                    keyboard.append([
-                        InlineKeyboardButton(
-                            text=f"➕ {result['channel_name']}", 
-                            url=result['channel_url']
-                        )
-                    ])
-            
-            if not_subscribed:
-                keyboard.append([
-                    InlineKeyboardButton(
-                        text="✅ Obunalarni tekshirish", 
-                        callback_data="check_subscription"
-                    )
-                ])
-                
-                logger.info(f"⚠️ User {user_id} needs to subscribe to {len([r for r in results if not r['subscribed']])} channels")
-                return InlineKeyboardMarkup(inline_keyboard=keyboard)
+            # Obuna bo'lmagan kanallar
+            unsubscribed = [
+                InlineKeyboardButton(text=f"➕ {r['channel_name']}", url=r['channel_url'])
+                for r in results if not r['subscribed']
+            ]
+
+            if not unsubscribed:
+                return None
+
+            # 1-3 ta: har biri alohida qatorda; 4+: 2 tadan qatorda
+            if len(unsubscribed) <= 3:
+                keyboard = [[btn] for btn in unsubscribed]
+            else:
+                keyboard = [
+                    unsubscribed[i:i + 2]
+                    for i in range(0, len(unsubscribed), 2)
+                ]
+
+            keyboard.append([
+                InlineKeyboardButton(
+                    text="✅ Obunalarni tekshirish",
+                    callback_data="check_subscription"
+                )
+            ])
+
+            logger.info(f"⚠️ User {user_id} needs to subscribe to {len(unsubscribed)} channels")
+            return InlineKeyboardMarkup(inline_keyboard=keyboard)
             
             logger.info(f"✅ User {user_id} subscribed to all channels")
             return None
