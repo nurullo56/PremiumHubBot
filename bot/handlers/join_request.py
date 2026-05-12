@@ -128,40 +128,22 @@ async def handle_join_request(request: ChatJoinRequest, bot: Bot):
         if chat_info:
             chat_type = chat_info.get('chat_type', 'managed')
             chat_name = chat_info.get('fullname', chat_title)
-            auto_approve = True
             logger.info(f"📊 Chat type: {chat_type}, name: {chat_name}")
         else:
-            # Channel not found by ID — maybe wrong ID was saved in admin panel.
-            # Try to find by title and fix the ID automatically.
+            # Channel not found by ID — try to find by title and fix the ID.
             chat_by_title = await join_request_repo.get_chat_by_title(chat_title)
             if chat_by_title:
                 old_id = chat_by_title['chat_id']
                 await join_request_repo.fix_chat_id(old_id, chat_id)
                 chat_type = chat_by_title.get('chat_type', 'managed')
                 chat_name = chat_by_title.get('fullname', chat_title)
-                auto_approve = True
                 logger.info(f"🔧 Chat ID corrected: {old_id} → {chat_id}, name: {chat_name}")
             else:
                 logger.info(f"ℹ️ Chat {chat_id} not in managed chats database")
-        
-        # 2. Auto-approve if managed chat
+
+        # 2. So'rov saqlanadi — admin o'zi Telegram orqali tasdiqlaydi
         status = "pending"
         approved = False
-        
-        if auto_approve:
-            try:
-                await bot.approve_chat_join_request(
-                    chat_id=request.chat.id,
-                    user_id=user_id
-                )
-                logger.info(f"✅ Auto-approved: {user_id} -> {chat_name}")
-                status = "approved"
-                approved = True
-                
-            except Exception as approve_error:
-                logger.warning(f"⚠️ Auto-approve failed: {approve_error}")
-                status = "pending"
-                approved = False
         
         # 3. Save to database
         try:
