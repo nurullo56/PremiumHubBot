@@ -133,11 +133,11 @@ class SubscriptionChecker:
             except Exception as e:
                 logger.error(f"❌ API check error for managed channel {channel_id}: {e}")
 
-            # Fallback: faqat admin tomonidan TASDIQLANGAN so'rovlar uchun
+            # Fallback: user join request yuborgan bo'lsa obuna hisoblash
             try:
                 req = await JoinRequestRepository.get_request(user_id, str(channel_id))
-                if req and req.get('status') == 'approved':
-                    logger.info(f"⚠️ API failed, using DB fallback (approved) for {channel_name}")
+                if req and req.get('has_requested', False):
+                    logger.info(f"✅ User {user_id} has pending request for {channel_name} — passing")
                     return {**base, 'subscribed': True}
             except Exception as e:
                 logger.error(f"❌ DB fallback error for managed channel {channel_id}: {e}")
