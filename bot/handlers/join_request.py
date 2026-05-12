@@ -162,12 +162,12 @@ async def handle_join_request(request: ChatJoinRequest, bot: Bot):
         except Exception as db_error:
             logger.error(f"❌ Database error: {db_error}", exc_info=True)
         
-        # 4. Send notification to user
-        if approved:
-            await send_welcome_message(bot, user_id, chat_name, chat_type)
-            # Auto-check: complete registration if all channels now joined
-            await _auto_complete_registration(user_id, bot)
-        else:
+        # 4. Foydalanuvchiga xabar yuborish va registratsiyani tekshirish
+        # So'rov saqlanganidan keyin barcha kanallarga obuna bo'lganini tekshiramiz.
+        # has_requested=True bo'lgani uchun subscription check o'tib ketadi.
+        await _auto_complete_registration(user_id, bot)
+
+        if not approved:
             await send_pending_message(bot, user_id, chat_name)
         
         # 5. Check if user exists in database
