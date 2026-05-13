@@ -9,6 +9,7 @@ from aiogram import Router, F, Bot
 from bot.filters import IsAdmin
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
+from aiogram.filters import StateFilter
 
 from bot.services.admin.admin_service import admin_service
 from bot.services.finance.balance_service import balance_service
@@ -154,7 +155,7 @@ async def show_users_menu(message: Message):
     )
 
 
-@router.message(F.text.regexp(r'^\d+$'))
+@router.message(F.text.regexp(r'^\d+$'), StateFilter(None))
 async def show_user_info(message: Message):
     """Show user info by entered ID."""
     try:
