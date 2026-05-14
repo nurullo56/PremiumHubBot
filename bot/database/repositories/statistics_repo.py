@@ -28,12 +28,13 @@ class StatisticsRepository:
                 cursor = await db.execute("SELECT COUNT(*) as count FROM users WHERE phone IS NOT NULL")
                 stats['users_with_phone'] = (await cursor.fetchone())['count']
                 
-                cursor = await db.execute("SELECT COUNT(*) as count FROM users WHERE balance > 0")
+                cursor = await db.execute("SELECT COUNT(*) as count FROM users WHERE balance_scaled > 0")
                 stats['users_with_balance'] = (await cursor.fetchone())['count']
-                
-                cursor = await db.execute("SELECT SUM(balance) as total FROM users")
+
+                cursor = await db.execute("SELECT SUM(balance_scaled) as total FROM users")
                 result = await cursor.fetchone()
-                stats['total_balance'] = result['total'] if result and result['total'] else 0
+                raw = result['total'] if result and result['total'] else 0
+                stats['total_balance'] = raw / 100.0
                 
                 cursor = await db.execute("SELECT SUM(referral_count) as total FROM users")
                 result = await cursor.fetchone()
