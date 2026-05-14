@@ -24,6 +24,9 @@ class ReferralService:
     
     async def get_referral_count(self, user_id: int) -> int:
         return await referral_repo.get_referral_count(user_id)
+
+    async def get_active_referral_count(self, user_id: int) -> int:
+        return await referral_repo.get_active_referral_count(user_id)
     
     async def get_referred_users(self, user_id: int, limit: int = 100) -> List[Dict[str, Any]]:
         return await referral_repo.get_referred_users(user_id, limit)

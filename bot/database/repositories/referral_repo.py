@@ -126,6 +126,21 @@ class ReferralRepository:
             return []
     
     @staticmethod
+    async def get_active_referral_count(user_id: int) -> int:
+        """Count referrals where referral_bonus_given = 1 (completed registration)."""
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT COUNT(*) as count FROM users WHERE referred_by = ? AND referral_bonus_given = 1",
+                    (user_id,)
+                )
+                result = await cursor.fetchone()
+                return result['count'] if result else 0
+        except Exception as e:
+            logger.error(f"❌ Failed to get active referral count for {user_id}: {e}")
+            return 0
+
+    @staticmethod
     async def get_total_referrals() -> int:
         try:
             async with get_db() as db:

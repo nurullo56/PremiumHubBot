@@ -52,14 +52,15 @@ async def show_user_info_message(message: Message, user_id: int):
         return
     
     balance = await balance_service.get_balance(user_id)
-    referrals = await referral_service.get_referral_count(user_id)
-    
+    total_referrals = await referral_service.get_referral_count(user_id)
+    active_referrals = await referral_service.get_active_referral_count(user_id)
+
     premium_status = user.get('premium_status', 'none')
     is_blocked = user.get('is_blocked', False)
     blocked_text = "✅ Ha" if is_blocked else "❌ Yo'q"
     username_display = user.get('username') or "❌ yo'q"
     phone_display = user.get('phone') or "❌ berilmagan"
-    
+
     # Premium status emojisi
     premium_emoji = {
         'active': '⭐',
@@ -67,7 +68,7 @@ async def show_user_info_message(message: Message, user_id: int):
         'pending': '⏳',
         'none': '⚪'
     }.get(premium_status, '⚪')
-    
+
     text = (
         f"👤 <b>FOYDALANUVCHI MA'LUMOTI</b>\n\n"
         f"🆔 <b>ID:</b> <code>{user_id}</code>\n"
@@ -75,13 +76,13 @@ async def show_user_info_message(message: Message, user_id: int):
         f"📱 <b>Username:</b> @{username_display}\n"
         f"📞 <b>Telefon:</b> {phone_display}\n"
         f"💎 <b>Balans:</b> {await balance_service.format_balance(balance)}\n"
-        f"👥 <b>Referallar:</b> {referrals}\n"
+        f"👥 <b>Referallar:</b> {total_referrals} (jami) | ✅ {active_referrals} (aktiv)\n"
         f"{premium_emoji} <b>Premium:</b> {premium_status}\n"
         f"🚫 <b>Bloklangan:</b> {blocked_text}\n\n"
         f"📅 <b>Ro'yxatdan:</b> {user.get('registration_date', 'N/A')}\n"
         f"🕐 <b>Oxirgi aktivlik:</b> {user.get('last_activity', 'N/A')}"
     )
-    
+
     await message.answer(
         text,
         reply_markup=get_user_management_keyboard(user_id, is_blocked),
@@ -98,21 +99,22 @@ async def update_user_info_message(message: Message, user_id: int):
         return
     
     balance = await balance_service.get_balance(user_id)
-    referrals = await referral_service.get_referral_count(user_id)
-    
+    total_referrals = await referral_service.get_referral_count(user_id)
+    active_referrals = await referral_service.get_active_referral_count(user_id)
+
     premium_status = user.get('premium_status', 'none')
     is_blocked = user.get('is_blocked', False)
     blocked_text = "✅ Ha" if is_blocked else "❌ Yo'q"
     username_display = user.get('username') or "❌ yo'q"
     phone_display = user.get('phone') or "❌ berilmagan"
-    
+
     premium_emoji = {
         'active': '⭐',
         'approved': '⭐',
         'pending': '⏳',
         'none': '⚪'
     }.get(premium_status, '⚪')
-    
+
     text = (
         f"👤 <b>FOYDALANUVCHI MA'LUMOTI</b>\n\n"
         f"🆔 <b>ID:</b> <code>{user_id}</code>\n"
@@ -120,13 +122,13 @@ async def update_user_info_message(message: Message, user_id: int):
         f"📱 <b>Username:</b> @{username_display}\n"
         f"📞 <b>Telefon:</b> {phone_display}\n"
         f"💎 <b>Balans:</b> {await balance_service.format_balance(balance)}\n"
-        f"👥 <b>Referallar:</b> {referrals}\n"
+        f"👥 <b>Referallar:</b> {total_referrals} (jami) | ✅ {active_referrals} (aktiv)\n"
         f"{premium_emoji} <b>Premium:</b> {premium_status}\n"
         f"🚫 <b>Bloklangan:</b> {blocked_text}\n\n"
         f"📅 <b>Ro'yxatdan:</b> {user.get('registration_date', 'N/A')}\n"
         f"🕐 <b>Oxirgi aktivlik:</b> {user.get('last_activity', 'N/A')}"
     )
-    
+
     await message.edit_text(
         text,
         reply_markup=get_user_management_keyboard(user_id, is_blocked),
