@@ -53,9 +53,9 @@ async def handle_gender(callback: CallbackQuery, state: FSMContext):
     
     logger.info(f"✅ Gender saved: {user_id} -> {gender}")
     
-    # Keyingi bosqich: telefon
-    from bot.handlers.registration.phone import ask_phone
-    await ask_phone(callback.message, state)
+    # Keyingi bosqich: obuna tekshirish
+    from bot.handlers.registration.subscription import ask_subscription
+    await ask_subscription(callback.message, state)
 
 
 __all__ = ["router", "check_gender", "handle_gender"]

@@ -54,8 +54,7 @@ async def get_target_users(db_path: str, limit: int = None):
     query = """
         SELECT user_id, fullname, username
         FROM users
-        WHERE phone IS NOT NULL
-          AND is_subscribed = 1
+        WHERE is_subscribed = 1
           AND (referral_count = 0 OR referral_count IS NULL)
           AND is_blocked = 0
         ORDER BY registration_date DESC

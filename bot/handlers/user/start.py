@@ -21,7 +21,6 @@ from bot.utils.common.timezone import now_str
 
 from bot.handlers.registration.captcha import check_captcha
 from bot.handlers.registration.gender import check_gender
-from bot.handlers.registration.phone import check_phone, ask_phone
 from bot.handlers.registration.subscription import check_subscription, ask_subscription
 
 logger = logging.getLogger(__name__)
@@ -111,12 +110,7 @@ async def is_registration_complete(user_id: int) -> tuple[bool, Optional[str]]:
     if not user.get('gender'):
         logger.debug(f"User {user_id} needs gender")
         return False, 'gender'
-    
-    # Check phone
-    if not user.get('phone'):
-        logger.debug(f"User {user_id} needs phone")
-        return False, 'phone'
-    
+
     # Check subscription — ikkala jadval (channels + managed_chats) tekshiriladi
     from bot.utils.subscription_checker import subscription_checker
     all_channels = await subscription_checker.get_all_mandatory_channels()
@@ -244,10 +238,6 @@ async def cmd_start(message: Message, state: FSMContext):
                     reply_markup=get_gender_keyboard(),
                     parse_mode="HTML"
                 )
-                return
-            
-            elif next_step == 'phone':
-                await ask_phone(message, state)
                 return
             
             elif next_step == 'subscription':
