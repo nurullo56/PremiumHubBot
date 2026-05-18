@@ -146,17 +146,27 @@ class SubscriptionChecker:
             logger.info(f"❌ User {user_id} not subscribed to managed channel {channel_name}")
             return {**base, 'subscribed': False}
 
-        # For public channels: check Telegram API
+        # For public channels: check Telegram API first
         try:
             member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
             is_subscribed = member.status not in ["left", "kicked"]
-            if not is_subscribed:
-                logger.info(f"❌ User {user_id} not subscribed to {channel_name}")
-            return {**base, 'subscribed': is_subscribed}
-
+            if is_subscribed:
+                return {**base, 'subscribed': True}
         except Exception as e:
             logger.error(f"❌ Channel {channel_id} check error: {e}")
-            return {**base, 'subscribed': False}
+
+        # API says not-member — channel may be private/restricted with join requests.
+        # Check join_requests DB as fallback.
+        try:
+            req = await JoinRequestRepository.get_request(user_id, str(channel_id))
+            if req and req.get('has_requested', False):
+                logger.info(f"✅ User {user_id} has pending request for {channel_name} — passing")
+                return {**base, 'subscribed': True}
+        except Exception as e:
+            logger.error(f"❌ DB fallback error for channel {channel_id}: {e}")
+
+        logger.info(f"❌ User {user_id} not subscribed to {channel_name}")
+        return {**base, 'subscribed': False}
     
     async def get_subscription_keyboard(
         self, 
