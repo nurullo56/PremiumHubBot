@@ -162,14 +162,28 @@ async def show_user_info(message: Message):
     """Show user info by entered ID."""
     try:
         user_id = int(message.text.strip())
-        
-        # Send typing indicator
         await message.bot.send_chat_action(message.chat.id, "typing")
-        
         await show_user_info_message(message, user_id)
-        
     except ValueError:
         await message.answer("❌ Noto'g'ri ID formati! Faqat raqam kiriting.")
+
+
+@router.message(IsAdmin(), F.text.regexp(r'^@?\w+$'), StateFilter(None))
+async def show_user_info_by_username(message: Message):
+    """Show user info by entered @username."""
+    raw = message.text.strip()
+    # Ignore short common words and bot commands
+    if len(raw.lstrip('@')) < 4 or raw.startswith('/'):
+        return
+
+    await message.bot.send_chat_action(message.chat.id, "typing")
+
+    user = await user_repo.get_by_username(raw)
+    if not user:
+        await message.answer(f"❌ <b>@{raw.lstrip('@')}</b> username li foydalanuvchi topilmadi.", parse_mode="HTML")
+        return
+
+    await show_user_info_message(message, user['user_id'])
 
 
 # ==================== BLOCK / UNBLOCK HANDLERS ====================
